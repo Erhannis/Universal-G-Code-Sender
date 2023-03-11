@@ -64,7 +64,11 @@ public class ProbeService implements UGSEventListener {
         OUTSIDE_XY(4),
         OUTSIDE_XYZ(6),
         //INSIDE_XY    (4),
-        //INSIDE_CIRCLE(4)
+        //INSIDE_CIRCLE(4),
+        //RAINY ANGLE(N),
+        OUTSIDE_CENTER(N),
+        //RAINY INSIDE_CENTER(N),
+        //RAINY PITCH(N),
         ;
 
         private final int numProbes;
@@ -97,6 +101,9 @@ public class ProbeService implements UGSEventListener {
         public final double xPush;
         public final double yPush;
         public final double zPush;
+        public final double angle; //THINK This's existence implies incorrectly that all operations support it.  //RAINY Maybe they SHOULD? //THINK quaternion rather than xy angle only?
+        public final double angleSpacing;
+        public final double angleOtherSide;
         public final double feedRate;
         public final double feedRateSlow;
         public final double retractAmount;
@@ -111,6 +118,7 @@ public class ProbeService implements UGSEventListener {
                 double xSpacing, double ySpacing, double zSpacing,
                 double xOffset, double yOffset, double zOffset,
                 double xPush, double yPush, double zPush,
+                double angle, double angleSpacing, double angleOtherSide,
                 double feedRate, double feedRateSlow, double retractAmount,
                 Units u, WorkCoordinateSystem wcs) {
             this.endPosition = null;
@@ -125,6 +133,9 @@ public class ProbeService implements UGSEventListener {
             this.xPush = xPush;
             this.yPush = yPush;
             this.zPush = zPush;
+            this.angle = angle;
+            this.angleSpacing = angleSpacing;
+            this.angleOtherSide = angleOtherSide;
             this.feedRate = feedRate;
             this.feedRateSlow = feedRateSlow;
             this.retractAmount = retractAmount;
@@ -196,7 +207,7 @@ public class ProbeService implements UGSEventListener {
                     Position probe = probePositions.get(1).getPositionIn(params.units);
 
                     double zDir = Math.signum(params.zSpacing) * -1;
-                    double zProbedOffset = zDir * params.zOffset;
+                    double zProbedOffset = zDir * params.zOffset; //DITTO
 
                     Position startPositionInUnits = params.startPosition.getPositionIn(params.units);
                     updateWCS(params.wcsToUpdate,
@@ -285,8 +296,8 @@ public class ProbeService implements UGSEventListener {
                     double radius = params.probeDiameter / 2;
                     double xDir = Math.signum(params.xSpacing) * -1;
                     double yDir = Math.signum(params.ySpacing) * -1;
-                    double xProbedOffset = xDir * (radius + params.xOffset);
-                    double yProbedOffset = yDir * (radius + params.yOffset);
+                    double xProbedOffset = xDir * (radius + params.xOffset); //DITTO
+                    double yProbedOffset = yDir * (radius + params.yOffset); //DITTO
 
                     Position startPositionInUnits = params.startPosition.getPositionIn(params.units);
                     updateWCS(params.wcsToUpdate,
@@ -391,9 +402,9 @@ public class ProbeService implements UGSEventListener {
                     double xDir = Math.signum(params.xSpacing) * -1;
                     double yDir = Math.signum(params.ySpacing) * -1;
                     double zDir = Math.signum(params.zSpacing) * -1;
-                    double xProbedOffset = xDir * (radius + params.xOffset);
-                    double yProbedOffset = yDir * (radius + params.yOffset);
-                    double zProbedOffset = zDir * params.zOffset;
+                    double xProbedOffset = xDir * (radius + params.xOffset); //DITTO
+                    double yProbedOffset = yDir * (radius + params.yOffset); //DITTO
+                    double zProbedOffset = zDir * params.zOffset; //DITTO
 
                     Position startPositionInUnits = params.startPosition.getPositionIn(params.units);
                     updateWCS(params.wcsToUpdate,
@@ -411,6 +422,220 @@ public class ProbeService implements UGSEventListener {
         }
     }
 
+    void performOutsideCenter(ProbeParameters params) throws IllegalStateException {
+        validateState();
+        currentOperation = ProbeOperation.OUTSIDE_CENTER;
+        this.params = params;
+        performOutsideCenterInternal(0);
+    }
+
+    /**
+     * 
+     * @param angle In degrees
+     * @param distance In units
+     * @return e.g. " X0.5 Y-2.3441"
+     */
+    String angleToVector(double angle, double distance) {
+        return " X" + Utils.formatter.format(angleToX(angle, distance)) + " Y" + Utils.formatter.format(angleToY(angle, distance));
+    }
+
+    double angleToX(double angle, double distance) {
+        return distance*Math.cos(angle*2*Math.PI/360.0);
+    }
+
+    double angleToY(double angle, double distance) {
+        return distance*Math.sin(angle*2*Math.PI/360.0);
+    }
+    
+    /**
+     * Angle 0 = X+, goes counter-clockwise I guess??? //THINK Is that the most obvious default?
+     * @param stepNumber
+     * @throws IllegalStateException 
+     */
+    private void performOutsideCenterInternal(int stepNumber) throws IllegalStateException {
+        String g = GcodeUtils.unitCommand(params.units);
+
+        String g0Abs = "G90 " + g + " G0";
+        String g0Rel = "G91 " + g + " G0";
+        
+        /*
+        // Should find top?  Eh, let z-probe handle that
+        Z-
+        probe angle+
+        probe slow angle+
+        Z+
+        angle+ other side
+        Z-
+        probe angle-
+        probe slow angle-        
+        */
+
+        continuation = () -> performOutsideCenterInternal(stepNumber + 1);
+        try {
+            switch (stepNumber) {
+                case 0: {
+                    // Reset (0,0,0) to make it easier to retract.
+                    updateWCS(params.wcsToUpdate, 0.0, 0.0, 0.0);
+
+                    // Z-
+                    gcode(g0Abs + " Z" + params.zSpacing);
+                    
+                    // Probe angle+
+                    probe(angleToVector(params.angle, params.angleSpacing), params.feedRate, params.units);
+                    break;
+                }
+                case 1: {
+                    // Retract angle-
+                    gcode(g0Rel + angleToVector(params.angle, retractDistance(params.angleSpacing, params.retractAmount)));
+                    // Probe angle+ slow
+                    probe(angleToVector(params.angle, params.angleSpacing), params.feedRateSlow, params.units);
+                }
+                case 2: {
+                    // Return to safe spot
+                    gcode(g0Abs + " X0.0 Y0.0");
+                    gcode(g0Abs + " Z0.0");
+                    
+                    // Move to other side
+                    gcode(g0Abs + angleToVector(params.angle, params.angleOtherSide));
+                    
+                    // Z-
+                    gcode(g0Abs + " Z" + params.zSpacing);
+
+                    // Probe angle-
+                    probe(angleToVector(params.angle, -params.angleSpacing), params.feedRate, params.units);
+                    break;
+                }
+                case 3: {
+                    // Retract angle+
+                    gcode(g0Rel + angleToVector(params.angle, retractDistance(-params.angleSpacing, params.retractAmount)));
+                    // Probe angle- slow
+                    probe(angleToVector(params.angle, -params.angleSpacing), params.feedRateSlow, params.units);
+                    break;
+                }
+                case 4: {
+                    // Back up
+                    gcode(g0Abs + angleToVector(params.angle, params.angleOtherSide));
+                    gcode(g0Abs + " Z0.0");
+                    gcode(g0Abs + " X0.0 Y0.0"); //THINK Should we return to 0,0,0?  Seems a waste, but consistency...
+                    break;
+                }
+                case 5: {
+                    // Once idle, perform calculations.
+                    Preconditions.checkState(probePositions.size() == 4, "Unexpected number of probe positions.");
+
+                    Position probeA = probePositions.get(1).getPositionIn(params.units);
+                    Position probeB = probePositions.get(3).getPositionIn(params.units);
+
+                    //DUMMY Hang on, this stuff is fundamentally wrong
+                    double radius = params.probeDiameter / 2;
+                    double xProbedOffset = angleToX(params.angle, radius) + params.xOffset;
+                    double yProbedOffset = angleToY(params.angle, radius) + params.yOffset;
+                    double zProbedOffset = params.zOffset;
+                    
+                    double xPosA = probeA.x
+
+                    asdf;
+                    double xCenter = ;
+                    
+                    Position startPositionInUnits = params.startPosition.getPositionIn(params.units);
+                    updateWCS(params.wcsToUpdate,
+                            startPositionInUnits.x - probeX.x + xProbedOffset,
+                            startPositionInUnits.y - probeY.y + yProbedOffset,
+                            startPositionInUnits.z - probeZ.z + zProbedOffset);
+                    break;
+                }
+                
+                case 0: {
+                    // Reset (0,0,0) to make it easier to retract.
+                    updateWCS(params.wcsToUpdate, 0.0, 0.0, 0.0);
+
+                    // Z
+                    probe('Z', params.feedRate, params.zSpacing, params.units);
+                    break;
+                }
+                case 1: {
+                    gcode(g0Rel + " Z" + retractDistance(params.zSpacing, params.retractAmount));
+                    probe('Z', params.feedRateSlow, params.zSpacing, params.units);
+                    break;
+                }
+                case 2: {
+                    gcode(g0Abs + " Z0.0");
+                    gcode(g0Abs + " X" + -params.xSpacing);
+                    Position probeZ = probePositions.get(1).getPositionIn(params.units);
+                    double zDir = Math.signum(params.zSpacing);
+                    double extent = zDir*Math.min(zDir*(probeZ.z + zDir*params.zPush), zDir*params.zSpacing);
+                    System.out.println("zDir " + zDir);
+                    System.out.println("extent " + extent);
+                    gcode(g0Abs + " Z" + extent); // Probe motion for safety?
+
+                    // X
+                    probe('X', params.feedRate, params.xSpacing, params.units);
+                    break;
+                }
+                case 3: {
+                    gcode(g0Rel + " X" + retractDistance(params.xSpacing, params.retractAmount));
+                    probe('X', params.feedRateSlow, params.xSpacing, params.units);
+                    break;
+                }
+                case 4: {
+                    gcode(g0Abs + " X" + -params.xSpacing);
+                    gcode(g0Abs + " Y" + -params.ySpacing);
+                    Position probeX = probePositions.get(3).getPositionIn(params.units);
+                    double xDir = Math.signum(params.xSpacing);
+                    double extent = xDir*Math.min(xDir*(probeX.x + xDir*params.xPush), 0);
+                    System.out.println("xDir " + xDir);
+                    System.out.println("extent " + extent);
+                    gcode(g0Abs + " X" + extent);
+
+                    // Y
+                    probe('Y', params.feedRate, params.ySpacing, params.units);
+                    break;
+                }
+                case 5: {
+                    gcode(g0Rel + " Y" + retractDistance(params.ySpacing, params.retractAmount));
+                    probe('Y', params.feedRateSlow, params.ySpacing, params.units);
+                    break;
+                }
+                case 6: {
+                    gcode(g0Abs + " Y" + -params.ySpacing);
+
+                    // Back to zero
+                    gcode(g0Abs + " Z0.0");
+                    gcode(g0Abs + " X0.0 Y0.0");
+                    break;
+                }
+                case 7: {
+                    // Once idle, perform calculations.
+                    Preconditions.checkState(probePositions.size() == 6, "Unexpected number of probe positions.");
+
+                    Position probeX = probePositions.get(3).getPositionIn(params.units);
+                    Position probeY = probePositions.get(5).getPositionIn(params.units);
+                    Position probeZ = probePositions.get(1).getPositionIn(params.units);
+
+                    double radius = params.probeDiameter / 2;
+                    double xDir = Math.signum(params.xSpacing) * -1;
+                    double yDir = Math.signum(params.ySpacing) * -1;
+                    double zDir = Math.signum(params.zSpacing) * -1;
+                    double xProbedOffset = xDir * (radius + params.xOffset); //CHECK Wait, I don't think the offset should be affected by the direction?
+                    double yProbedOffset = yDir * (radius + params.yOffset); //DITTO
+                    double zProbedOffset = zDir * params.zOffset; //DITTO
+
+                    Position startPositionInUnits = params.startPosition.getPositionIn(params.units);
+                    updateWCS(params.wcsToUpdate,
+                            startPositionInUnits.x - probeX.x + xProbedOffset,
+                            startPositionInUnits.y - probeY.y + yProbedOffset,
+                            startPositionInUnits.z - probeZ.z + zProbedOffset);
+                    break;
+                }
+                default:
+                    throw new UnsupportedOperationException("Invalid step number: " + stepNumber);
+            }
+        } catch (Exception e) {
+            resetProbe();
+            logger.log(Level.SEVERE, "Exception during XYZ probe operation.", e);
+        }
+    }
+    
     private void updateWCS(WorkCoordinateSystem wcs, Double x, Double y, Double z) throws Exception {
         StringBuilder sb = new StringBuilder();
         // Format the x, y, and z to prevent printing with double "E" notation.
@@ -439,6 +664,14 @@ public class ProbeService implements UGSEventListener {
      */
     private void probe(char axis, double rate, double distance, Units u) throws Exception {
         backend.probe(String.valueOf(axis), rate, distance, u);
+    }
+
+    private void probe(String target, double rate, Units u) throws Exception {
+        backend.probe(target, rate, u);
+    }
+    
+    private void probe(double x, double y, double z, double rate, Units u) throws Exception {
+        backend.probe(x, y, z, rate, u);
     }
 
     @Override

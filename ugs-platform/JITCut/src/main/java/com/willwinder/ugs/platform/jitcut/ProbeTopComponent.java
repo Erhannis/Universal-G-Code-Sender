@@ -262,6 +262,7 @@ public final class ProbeTopComponent extends TopComponent implements UGSEventLis
                         getDouble(xyzXDistanceModel), getDouble(xyzYDistanceModel), getDouble(xyzZDistanceModel),
                         getDouble(xyzXOffsetModel), getDouble(xyzYOffsetModel), getDouble(xyzZOffsetModel),
                         getDouble(xyzXPushModel), getDouble(xyzYPushModel), getDouble(xyzZPushModel), //THINK Final push not used
+                        0., 0., 0.,
                         getDouble(settingsFastFindRate), getDouble(settingsSlowMeasureRate),
                         getDouble(settingsRetractAmount), getUnits(), get(settingsWorkCoordinate));
                 this.cornerRenderable.setContext(pc, backend.getWorkPosition(), backend.getMachinePosition());
@@ -274,6 +275,7 @@ public final class ProbeTopComponent extends TopComponent implements UGSEventLis
                         getDouble(outsideXDistanceModel), getDouble(outsideYDistanceModel), 0.,
                         getDouble(outsideXOffsetModel), getDouble(outsideYOffsetModel), 0.,
                         getDouble(outsideXPushModel), getDouble(outsideYPushModel), 0., //THINK Final push not used
+                        0., 0., 0.,
                         getDouble(settingsFastFindRate), getDouble(settingsSlowMeasureRate),
                         getDouble(settingsRetractAmount), getUnits(), get(settingsWorkCoordinate));
                 this.cornerRenderable.setContext(pc, backend.getWorkPosition(), backend.getMachinePosition());
@@ -294,6 +296,7 @@ public final class ProbeTopComponent extends TopComponent implements UGSEventLis
                         getDouble(settingsProbeDiameter), backend.getMachinePosition(),
                         0., 0., getDouble(zProbeDistance),
                         0., 0., getDouble(zProbeOffset),
+                        0., 0., 0.,
                         0., 0., 0.,
                         getDouble(settingsFastFindRate), getDouble(settingsSlowMeasureRate),
                         getDouble(settingsRetractAmount), getUnits(), get(settingsWorkCoordinate));

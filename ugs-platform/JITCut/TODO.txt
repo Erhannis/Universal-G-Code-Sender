@@ -1,3 +1,33 @@
-outside corner with negative values gives weird render
+Is "probe" (G38.2) really in absolute coords????  the code says "distance"
+Check //UNTESTED periodically
+Move "offset" values into settings
+
+visualization
+  outside corner with negative values gives weird render
+  update corners with push?
+  measure angle
+  (align with angle?)
+  center
+    inside, outside
+  pitch
 
 Probe intermittently goes in the wrong direction.  Seems consistent in a given program run?
+
+features
+  measure angle
+  align with angle???
+    (probably extensive changes, since grbl doesn't support rotation)
+    (maybe I could restrict the scope)
+    how does the autolevel do it?
+  center
+    inside
+    outside
+  pitch
+
+external features?
+  bore
+    (shell, solid)
+    x
+    (cylinder, square, cube?)
+     
+  
