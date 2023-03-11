@@ -1,0 +1,3 @@
+outside corner with negative values gives weird render
+
+Probe intermittently goes in the wrong direction.  Seems consistent in a given program run?
