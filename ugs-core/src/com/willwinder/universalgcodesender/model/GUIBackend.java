@@ -294,6 +294,16 @@ public class GUIBackend implements BackendAPI {
     }
 
     @Override
+    public void probe(String target, double feedRate, UnitUtils.Units units) throws Exception {
+        controller.probe(target, feedRate, units);
+    }
+
+    @Override
+    public void probe(double x, double y, double z, double feedRate, UnitUtils.Units units) throws Exception {
+        controller.probe(x, y, z, feedRate, units);
+    }
+    
+    @Override
     public void offsetTool(String axis, double offset, UnitUtils.Units units) throws Exception {
         controller.offsetTool(axis, offset, units);
     }

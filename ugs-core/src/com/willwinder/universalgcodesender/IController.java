@@ -127,6 +127,8 @@ public interface IController {
      * Probe control
      */
     void probe(String axis, double feedRate, double distance, UnitUtils.Units units) throws Exception;
+    void probe(String target, double feedRate, UnitUtils.Units units) throws Exception;
+    void probe(double x, double y, double z, double feedRate, UnitUtils.Units units) throws Exception;
     void offsetTool(String axis, double offset, UnitUtils.Units units) throws Exception;
 
     /*

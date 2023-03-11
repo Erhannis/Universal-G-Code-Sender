@@ -268,12 +268,30 @@ public abstract class AbstractController implements ICommunicatorListener, ICont
 
     @Override
     public void probe(String axis, double feedRate, double distance, UnitUtils.Units units) throws Exception {
-        logger.log(Level.INFO,
-                String.format("Probing. axis: %s, feedRate: %s, distance: %s, units: %s",
-                    axis, feedRate, distance, units));
+//        logger.log(Level.INFO,
+//                String.format("Probing. axis: %s, feedRate: %s, distance: %s, units: %s",
+//                    axis, feedRate, distance, units));
 
-        String probePattern = "G38.2 %s%s F%s";
-        String probeCommand = String.format(probePattern, axis, formatter.format(distance), formatter.format(feedRate));
+        String target = String.format("%s%s", axis, formatter.format(distance));
+        probe(target, feedRate, units);
+    }
+
+    //UNTESTED
+    @Override
+    public void probe(double x, double y, double z, double feedRate, UnitUtils.Units units) throws Exception {
+        String target = String.format("X%s Y%s Z%s", formatter.format(x), formatter.format(y), formatter.format(z));
+        probe(target, feedRate, units);
+    }
+    
+    //UNTESTED
+    @Override
+    public void probe(String target, double feedRate, UnitUtils.Units units) throws Exception {
+        logger.log(Level.INFO,
+                String.format("Probing. target: %s, feedRate: %s, units: %s",
+                        target, feedRate, units));
+
+        String probePattern = "G38.2 %s F%s";
+        String probeCommand = String.format(probePattern, target, formatter.format(feedRate));
 
         GcodeCommand state = createCommand(GcodeUtils.unitCommand(units) + " G91 G49");
         state.setTemporaryParserModalChange(true);
@@ -286,7 +304,7 @@ public abstract class AbstractController implements ICommunicatorListener, ICont
 
         restoreParserModalState();
     }
-
+    
     @Override
     public void offsetTool(String axis, double offset, UnitUtils.Units units) throws Exception {
         logger.log(Level.INFO, "Probe offset.");
