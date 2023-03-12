@@ -20,8 +20,8 @@ features
     (maybe I could restrict the scope)
     how does the autolevel do it?
   center
-    inside
-    outside
+    of (circle, line)
+    x (inside, outside)
   pitch
 
 external features?

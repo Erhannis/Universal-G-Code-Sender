@@ -143,6 +143,14 @@ public final class ProbeTopComponent extends TopComponent implements UGSEventLis
     private SpinnerNumberModel insideYPushModel;
     private final JButton measureInside = new JButton(Localization.getString("probe.measure.inside-corner"));
 
+    // outside center tab
+    private static final String OUTSIDE_CENTER_TAB = "OCenter";
+    private SpinnerNumberModel mocZDistanceModel; //TAG
+    private SpinnerNumberModel mocAngleModel; //TAG
+    private SpinnerNumberModel mocXYDistanceModel; //TAG
+    private SpinnerNumberModel mocOtherSideModel; //TAG
+    private final JButton measureOutsideCenter = new JButton("Measure outside center"); //RAINY Localization //TAG
+    
     // settings
     private JComboBox<WorkCoordinateSystem> settingsWorkCoordinate;
     private JComboBox<String> settingsUnits;
@@ -193,6 +201,11 @@ public final class ProbeTopComponent extends TopComponent implements UGSEventLis
         private double insideXPush;
         private double insideYPush;
 
+        private double mocZDistance;
+        private double mocAngle;
+        private double mocXYDistance;
+        private double mocOtherSide;
+        
         private int settingsWorkCoordinateIdx;
         private int settingsUnitsIdx;
         private double settingsProbeDiameter;
@@ -245,6 +258,12 @@ public final class ProbeTopComponent extends TopComponent implements UGSEventLis
         insideXPushModel = new SpinnerNumberModel(2., -largeSpinner, largeSpinner, 0.1);
         insideYPushModel = new SpinnerNumberModel(2., -largeSpinner, largeSpinner, 0.1);
 
+        // OUTSIDE MEASURE CENTER TAB
+        mocZDistanceModel = new SpinnerNumberModel(10., -largeSpinner, largeSpinner, 0.1);
+        mocAngleModel = new SpinnerNumberModel(90., -largeSpinner, largeSpinner, 0.1); //THINK Restrict to 0-360?
+        mocXYDistanceModel = new SpinnerNumberModel(50., -largeSpinner, largeSpinner, 0.1);
+        mocOtherSideModel = new SpinnerNumberModel(100., -largeSpinner, largeSpinner, 0.1);
+        
         // SETTINGS TAB
         settingsWorkCoordinate = new JComboBox<>(new WorkCoordinateSystem[]{G54, G55, G56, G57, G58, G59});
         settingsUnits = new JComboBox<>(new String[]{
@@ -304,6 +323,20 @@ public final class ProbeTopComponent extends TopComponent implements UGSEventLis
                 ps2.performZProbe(pc);
             });
 
+        measureOutsideCenter.addActionListener(e -> {
+                ProbeParameters pc = new ProbeParameters(
+                        getDouble(settingsProbeDiameter), backend.getMachinePosition(),
+                        0., 0., getDouble(mocZDistanceModel),
+                        0., 0., 0., //DUMMY Offset
+                        0., 0., 0.,
+                        getDouble(mocAngleModel), getDouble(mocXYDistanceModel), getDouble(mocOtherSideModel),
+                        getDouble(settingsFastFindRate), getDouble(settingsSlowMeasureRate),
+                        getDouble(settingsRetractAmount), getUnits(), get(settingsWorkCoordinate));
+                //DUMMY renderable
+                //this.zRenderable.setStart(backend.getWorkPosition());
+                ps2.performOutsideCenter(pc);
+            });
+
         initComponents();
         updateControls();
 
@@ -334,6 +367,11 @@ public final class ProbeTopComponent extends TopComponent implements UGSEventLis
         this.insideXPushModel.addChangeListener(l -> controlChangeListener());
         this.insideYPushModel.addChangeListener(l -> controlChangeListener());
 
+        this.mocZDistanceModel.addChangeListener(l -> controlChangeListener());
+        this.mocAngleModel.addChangeListener(l -> controlChangeListener());
+        this.mocXYDistanceModel.addChangeListener(l -> controlChangeListener());
+        this.mocOtherSideModel.addChangeListener(l -> controlChangeListener());
+        
         this.settingsWorkCoordinate.addActionListener(l -> controlChangeListener());
         this.settingsUnits.addActionListener(l -> controlChangeListener());
         this.settingsProbeDiameter.addChangeListener(l -> controlChangeListener());
@@ -372,6 +410,17 @@ public final class ProbeTopComponent extends TopComponent implements UGSEventLis
             case Z_TAB:
                 active = zRenderable;
                 zRenderable.updateSpacing(getDouble(zProbeDistance), getDouble(zProbeOffset));
+                break;
+            case OUTSIDE_CENTER_TAB:
+                //DUMMY
+//                active = cornerRenderable;
+//                cornerRenderable.updateSpacing(
+//                        getDouble(outsideXDistanceModel),
+//                        getDouble(outsideYDistanceModel),
+//                        0,
+//                        getDouble(outsideXOffsetModel),
+//                        getDouble(outsideYOffsetModel),
+//                        0);
                 break;
             case SETTINGS_TAB:
                 active = null;
@@ -483,6 +532,21 @@ public final class ProbeTopComponent extends TopComponent implements UGSEventLis
         z.add(new JLabel(Z_DISTANCE));
         z.add(new JSpinner(this.zProbeDistance), "growx");
 
+        // OUTSIDE CENTER TAB
+        JPanel outsideCenter = new JPanel(new MigLayout("flowy, wrap 2"));
+        //RAINY Localization?
+        outsideCenter.add(new JLabel("Z Probe distance"));
+        outsideCenter.add(new JLabel("XY Probe distance"));
+        outsideCenter.add(new JSpinner(mocZDistanceModel), "growx");
+        outsideCenter.add(new JSpinner(mocXYDistanceModel), "growx");
+
+        outsideCenter.add(new JLabel("Angle")); //RAINY Tooltip explaining degrees, 0=X+, ccw
+        outsideCenter.add(new JLabel("Other side"));
+        outsideCenter.add(new JSpinner(mocAngleModel), "growx");
+        outsideCenter.add(new JSpinner(mocOtherSideModel), "growx");
+
+        outsideCenter.add(measureOutsideCenter, "spanx 2, spany 2, growx, growy");
+        
         // SETTINGS TAB
         JPanel settings = new JPanel(new MigLayout("wrap 6"));
         settings.add(new JLabel(Localization.getString("gcode.setting.units") + ":"), "al right");
@@ -507,6 +571,7 @@ public final class ProbeTopComponent extends TopComponent implements UGSEventLis
         jtp.add(OUTSIDE_TAB, outside);
         jtp.add(Z_TAB, z);
         //jtp.add("inside", inside);
+        jtp.add(OUTSIDE_CENTER_TAB, outsideCenter);
         jtp.add(SETTINGS_TAB, settings);
 
         this.setLayout(new BorderLayout());
@@ -565,6 +630,11 @@ public final class ProbeTopComponent extends TopComponent implements UGSEventLis
         ps.insideXPush = getDouble(insideXPushModel);
         ps.insideYPush = getDouble(insideYPushModel);
 
+        ps.mocZDistance = getDouble(mocZDistanceModel);
+        ps.mocAngle = getDouble(mocAngleModel);
+        ps.mocXYDistance = getDouble(mocXYDistanceModel);
+        ps.mocOtherSide = getDouble(mocOtherSideModel);
+        
         ps.settingsWorkCoordinateIdx = settingsWorkCoordinate.getSelectedIndex();
         ps.settingsUnitsIdx = settingsUnits.getSelectedIndex();
         ps.settingsProbeDiameter = getDouble(settingsProbeDiameter);
@@ -610,6 +680,11 @@ public final class ProbeTopComponent extends TopComponent implements UGSEventLis
         insideYOffsetModel.setValue(ps.insideYOffset);
         insideXPushModel.setValue(ps.insideXPush);
         insideYPushModel.setValue(ps.insideYPush);
+
+        mocZDistanceModel.setValue(ps.mocZDistance);
+        mocAngleModel.setValue(ps.mocAngle);
+        mocXYDistanceModel.setValue(ps.mocXYDistance);
+        mocOtherSideModel.setValue(ps.mocOtherSide);
 
         settingsWorkCoordinate.setSelectedIndex(ps.settingsWorkCoordinateIdx);
         settingsUnits.setSelectedIndex(ps.settingsUnitsIdx);

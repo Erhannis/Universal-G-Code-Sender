@@ -66,7 +66,7 @@ public class ProbeService implements UGSEventListener {
         //INSIDE_XY    (4),
         //INSIDE_CIRCLE(4),
         //RAINY ANGLE(N),
-        OUTSIDE_CENTER(N),
+        OUTSIDE_CENTER(4),
         //RAINY INSIDE_CENTER(N),
         //RAINY PITCH(N),
         ;
@@ -528,103 +528,23 @@ public class ProbeService implements UGSEventListener {
 
                     //DUMMY Hang on, this stuff is fundamentally wrong
                     double radius = params.probeDiameter / 2;
-                    double xProbedOffset = angleToX(params.angle, radius) + params.xOffset;
-                    double yProbedOffset = angleToY(params.angle, radius) + params.yOffset;
+                    double xProbedOffset = angleToX(params.angle, -radius) + params.xOffset;
+                    double yProbedOffset = angleToY(params.angle, -radius) + params.yOffset;
                     double zProbedOffset = params.zOffset;
                     
-                    double xPosA = probeA.x
+                    double xPosA = probeA.x + angleToX(params.angle, -radius) + params.xOffset;
+                    double yPosA = probeA.y + angleToY(params.angle, -radius) + params.yOffset;
+                    double xPosB = probeB.x + angleToX(params.angle, -radius) + params.xOffset;
+                    double yPosB = probeB.y + angleToY(params.angle, -radius) + params.yOffset;
 
-                    asdf;
-                    double xCenter = ;
+                    double xCenter = (xPosA+xPosB)/2;
+                    double yCenter = (yPosA+yPosB)/2;
                     
                     Position startPositionInUnits = params.startPosition.getPositionIn(params.units);
                     updateWCS(params.wcsToUpdate,
-                            startPositionInUnits.x - probeX.x + xProbedOffset,
-                            startPositionInUnits.y - probeY.y + yProbedOffset,
-                            startPositionInUnits.z - probeZ.z + zProbedOffset);
-                    break;
-                }
-                
-                case 0: {
-                    // Reset (0,0,0) to make it easier to retract.
-                    updateWCS(params.wcsToUpdate, 0.0, 0.0, 0.0);
-
-                    // Z
-                    probe('Z', params.feedRate, params.zSpacing, params.units);
-                    break;
-                }
-                case 1: {
-                    gcode(g0Rel + " Z" + retractDistance(params.zSpacing, params.retractAmount));
-                    probe('Z', params.feedRateSlow, params.zSpacing, params.units);
-                    break;
-                }
-                case 2: {
-                    gcode(g0Abs + " Z0.0");
-                    gcode(g0Abs + " X" + -params.xSpacing);
-                    Position probeZ = probePositions.get(1).getPositionIn(params.units);
-                    double zDir = Math.signum(params.zSpacing);
-                    double extent = zDir*Math.min(zDir*(probeZ.z + zDir*params.zPush), zDir*params.zSpacing);
-                    System.out.println("zDir " + zDir);
-                    System.out.println("extent " + extent);
-                    gcode(g0Abs + " Z" + extent); // Probe motion for safety?
-
-                    // X
-                    probe('X', params.feedRate, params.xSpacing, params.units);
-                    break;
-                }
-                case 3: {
-                    gcode(g0Rel + " X" + retractDistance(params.xSpacing, params.retractAmount));
-                    probe('X', params.feedRateSlow, params.xSpacing, params.units);
-                    break;
-                }
-                case 4: {
-                    gcode(g0Abs + " X" + -params.xSpacing);
-                    gcode(g0Abs + " Y" + -params.ySpacing);
-                    Position probeX = probePositions.get(3).getPositionIn(params.units);
-                    double xDir = Math.signum(params.xSpacing);
-                    double extent = xDir*Math.min(xDir*(probeX.x + xDir*params.xPush), 0);
-                    System.out.println("xDir " + xDir);
-                    System.out.println("extent " + extent);
-                    gcode(g0Abs + " X" + extent);
-
-                    // Y
-                    probe('Y', params.feedRate, params.ySpacing, params.units);
-                    break;
-                }
-                case 5: {
-                    gcode(g0Rel + " Y" + retractDistance(params.ySpacing, params.retractAmount));
-                    probe('Y', params.feedRateSlow, params.ySpacing, params.units);
-                    break;
-                }
-                case 6: {
-                    gcode(g0Abs + " Y" + -params.ySpacing);
-
-                    // Back to zero
-                    gcode(g0Abs + " Z0.0");
-                    gcode(g0Abs + " X0.0 Y0.0");
-                    break;
-                }
-                case 7: {
-                    // Once idle, perform calculations.
-                    Preconditions.checkState(probePositions.size() == 6, "Unexpected number of probe positions.");
-
-                    Position probeX = probePositions.get(3).getPositionIn(params.units);
-                    Position probeY = probePositions.get(5).getPositionIn(params.units);
-                    Position probeZ = probePositions.get(1).getPositionIn(params.units);
-
-                    double radius = params.probeDiameter / 2;
-                    double xDir = Math.signum(params.xSpacing) * -1;
-                    double yDir = Math.signum(params.ySpacing) * -1;
-                    double zDir = Math.signum(params.zSpacing) * -1;
-                    double xProbedOffset = xDir * (radius + params.xOffset); //CHECK Wait, I don't think the offset should be affected by the direction?
-                    double yProbedOffset = yDir * (radius + params.yOffset); //DITTO
-                    double zProbedOffset = zDir * params.zOffset; //DITTO
-
-                    Position startPositionInUnits = params.startPosition.getPositionIn(params.units);
-                    updateWCS(params.wcsToUpdate,
-                            startPositionInUnits.x - probeX.x + xProbedOffset,
-                            startPositionInUnits.y - probeY.y + yProbedOffset,
-                            startPositionInUnits.z - probeZ.z + zProbedOffset);
+                            startPositionInUnits.x + xCenter,
+                            startPositionInUnits.y - yCenter,
+                            null);
                     break;
                 }
                 default:
