@@ -145,10 +145,10 @@ public final class ProbeTopComponent extends TopComponent implements UGSEventLis
 
     // outside center tab
     private static final String OUTSIDE_CENTER_TAB = "OCenter";
-    private SpinnerNumberModel mocZDistanceModel; //TAG
-    private SpinnerNumberModel mocAngleModel; //TAG
-    private SpinnerNumberModel mocXYDistanceModel; //TAG
-    private SpinnerNumberModel mocOtherSideModel; //TAG
+    private SpinnerNumberModel mocZDistanceModel;
+    private SpinnerNumberModel mocAngleModel;
+    private SpinnerNumberModel mocXYDistanceModel;
+    private SpinnerNumberModel mocOtherSideModel;
     private final JButton measureOutsideCenter = new JButton("Measure outside center"); //RAINY Localization //TAG
     
     // settings
@@ -437,6 +437,7 @@ public final class ProbeTopComponent extends TopComponent implements UGSEventLis
         boolean enabled = backend.isIdle();
         this.measureInside.setEnabled(enabled);
         this.measureOutside.setEnabled(enabled);
+        this.measureOutsideCenter.setEnabled(enabled);
         this.zProbeButton.setEnabled(enabled);
     }
 
