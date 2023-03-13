@@ -469,7 +469,7 @@ public class ProbeService implements UGSEventListener {
         String g0Rel = "G91 " + g + " G0";
         
         /*
-        // Should find top?  Eh, let z-probe handle that
+        // Should find top?  Eh, let z-probe handle that //THINK ...Or SHOULD I?
         Z-
         probe angle+
         probe slow angle+
@@ -499,6 +499,7 @@ public class ProbeService implements UGSEventListener {
                     gcode(g0Rel + angleToVector(params.angle, retractDistance(params.angleSpacing, params.retractAmount)));
                     // Probe angle+ slow
                     probe(angleToVector(params.angle, params.angleSpacing), params.feedRateSlow, params.units);
+                    break;
                 }
                 case 2: {
                     // Return to safe spot
@@ -524,7 +525,6 @@ public class ProbeService implements UGSEventListener {
                 }
                 case 4: {
                     // Back up
-                    // There was a whole litany of things that went wrong with the test; it maybe didn't reverse on second go, it pushed through the part, it did the second half of the measurement twice???
                     gcode(g0Abs + angleToVector(params.angle, params.angleOtherSide));
                     gcode(g0Abs + " Z0.0");
                     gcode(g0Abs + " X0.0 Y0.0"); //THINK Should we return to 0,0,0?  Seems a waste, but consistency...
@@ -537,14 +537,10 @@ public class ProbeService implements UGSEventListener {
                     Position probeA = probePositions.get(1).getPositionIn(params.units);
                     Position probeB = probePositions.get(3).getPositionIn(params.units);
 
-                    //DUMMY Hang on, this stuff is fundamentally wrong
                     double radius = params.probeDiameter / 2;
-                    double xProbedOffset = angleToX(params.angle, -radius) + params.xOffset;
-                    double yProbedOffset = angleToY(params.angle, -radius) + params.yOffset;
-                    double zProbedOffset = params.zOffset;
                     
-                    double xPosA = probeA.x + angleToX(params.angle, -radius) + params.xOffset;
-                    double yPosA = probeA.y + angleToY(params.angle, -radius) + params.yOffset;
+                    double xPosA = probeA.x + angleToX(params.angle, radius) + params.xOffset;
+                    double yPosA = probeA.y + angleToY(params.angle, radius) + params.yOffset;
                     double xPosB = probeB.x + angleToX(params.angle, -radius) + params.xOffset;
                     double yPosB = probeB.y + angleToY(params.angle, -radius) + params.yOffset;
 
@@ -553,7 +549,7 @@ public class ProbeService implements UGSEventListener {
                     
                     Position startPositionInUnits = params.startPosition.getPositionIn(params.units);
                     updateWCS(params.wcsToUpdate,
-                            startPositionInUnits.x + xCenter,
+                            startPositionInUnits.x - xCenter,
                             startPositionInUnits.y - yCenter,
                             null);
                     break;
