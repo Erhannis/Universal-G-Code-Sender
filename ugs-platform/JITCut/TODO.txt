@@ -22,7 +22,9 @@ features
   center
     of (circle, line)
     x (inside, outside)
+    Permit manual jogging between sides?
   pitch
+  more manual measurements - store as variables etc.
 
 external features?
   bore

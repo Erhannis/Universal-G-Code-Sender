@@ -69,6 +69,7 @@ public class ProbeService implements UGSEventListener {
         OUTSIDE_CENTER(4),
         //RAINY INSIDE_CENTER(N),
         //RAINY PITCH(N),
+        CYLINDER_SHELL(0),
         ;
 
         private final int numProbes;
@@ -104,6 +105,10 @@ public class ProbeService implements UGSEventListener {
         public final double angle; //THINK This's existence implies incorrectly that all operations support it.  //RAINY Maybe they SHOULD? //THINK quaternion rather than xy angle only?
         public final double angleSpacing;
         public final double angleOtherSide;
+        public final double cutDiameter;
+        public final double cutLayerThicknessZ;
+        public final double cutDepthZ;
+        public final double cutFeedRate; //THINK Separate parameter for Z/XY?
         public final double feedRate;
         public final double feedRateSlow;
         public final double retractAmount;
@@ -119,6 +124,7 @@ public class ProbeService implements UGSEventListener {
                 double xOffset, double yOffset, double zOffset,
                 double xPush, double yPush, double zPush,
                 double angle, double angleSpacing, double angleOtherSide,
+                double cutDiameter, double cutLayerThicknessZ, double cutDepthZ, double cutFeedRate,
                 double feedRate, double feedRateSlow, double retractAmount,
                 Units u, WorkCoordinateSystem wcs) {
             this.endPosition = null;
@@ -136,6 +142,10 @@ public class ProbeService implements UGSEventListener {
             this.angle = angle;
             this.angleSpacing = angleSpacing;
             this.angleOtherSide = angleOtherSide;
+            this.cutDiameter = cutDiameter;
+            this.cutLayerThicknessZ = cutLayerThicknessZ;
+            this.cutDepthZ = cutDepthZ;
+            this.cutFeedRate = cutFeedRate;
             this.feedRate = feedRate;
             this.feedRateSlow = feedRateSlow;
             this.retractAmount = retractAmount;
@@ -422,13 +432,6 @@ public class ProbeService implements UGSEventListener {
         }
     }
 
-    void performOutsideCenter(ProbeParameters params) throws IllegalStateException {
-        validateState();
-        currentOperation = ProbeOperation.OUTSIDE_CENTER;
-        this.params = params;
-        performOutsideCenterInternal(0);
-    }
-
     /**
      * 
      * @param angle In degrees
@@ -445,6 +448,13 @@ public class ProbeService implements UGSEventListener {
 
     double angleToY(double angle, double distance) {
         return distance*Math.sin(angle*2*Math.PI/360.0);
+    }
+    
+    void performOutsideCenter(ProbeParameters params) throws IllegalStateException {
+        validateState();
+        currentOperation = ProbeOperation.OUTSIDE_CENTER;
+        this.params = params;
+        performOutsideCenterInternal(0);
     }
     
     /**
@@ -514,6 +524,7 @@ public class ProbeService implements UGSEventListener {
                 }
                 case 4: {
                     // Back up
+                    // There was a whole litany of things that went wrong with the test; it maybe didn't reverse on second go, it pushed through the part, it did the second half of the measurement twice???
                     gcode(g0Abs + angleToVector(params.angle, params.angleOtherSide));
                     gcode(g0Abs + " Z0.0");
                     gcode(g0Abs + " X0.0 Y0.0"); //THINK Should we return to 0,0,0?  Seems a waste, but consistency...
@@ -556,6 +567,85 @@ public class ProbeService implements UGSEventListener {
         }
     }
     
+    void performCutCylinderShell(ProbeParameters params) throws IllegalStateException {
+        validateState();
+        currentOperation = ProbeOperation.CYLINDER_SHELL;
+        this.params = params;
+        performCutCylinderShellInternal(0);
+    }
+
+    private void performCutCylinderShellInternal(int stepNumber) throws IllegalStateException {
+        String u = GcodeUtils.unitCommand(params.units);
+
+        String ABS = "G90 " + u;
+        String REL = "G91 " + u;
+        String FAST = "G0"; //CHECK This seems to ignore feed entirely - does that get set somewhere at some point, or is it wholly independent of our config?
+        String SLOW = "G1";
+                
+        continuation = () -> performCutCylinderShellInternal(stepNumber + 1);
+        try {
+            switch (stepNumber) {
+                case 0: {
+                    // Reset (_, _, 0) to make it easier to retract.
+                    updateWCS(params.wcsToUpdate, 0.0, 0.0, 0.0);
+
+                    //RAINY This "have one params class for everything" is feeling more and more incorrect
+                    //THINK Should offset be factored in, or no?
+                    
+                    double r = (params.cutDiameter / 2) - (params.probeDiameter / 2);
+                    
+                    // CW Arc
+                    //THINK Apply rotations?
+                    gcode(ABS, FAST, "Y"+f(r));
+
+                    //THINK The extra negatives are a bit weird
+                    //CHECK How much gcode can we send at once?  Can/should we break it up?
+                    double z = 0;
+                    while (true) {
+                        if (z <= -params.cutDepthZ) {
+                            break;
+                        }
+                        if ((z - (-params.cutDepthZ)) < params.cutLayerThicknessZ) {
+                            gcode(ABS, SLOW, "Z"+f(-params.cutDepthZ), "F"+f(params.cutFeedRate));
+                            z = -params.cutDepthZ;
+                        } else {
+                            gcode(REL, SLOW, "Z"+f(-params.cutLayerThicknessZ), "F"+f(params.cutFeedRate));
+                            z -= params.cutLayerThicknessZ;
+                        }
+                        // One half of the cut
+                        gcode("G2","X"+f(0),"Y"+f(-r),"I"+f(0),"J"+f(-r),"F"+f(params.cutFeedRate));
+                        // Second half
+                        gcode("G2","X"+f(0),"Y"+f(r),"I"+f(0),"J"+f(r),"F"+f(params.cutFeedRate));
+                    }
+                    
+                    gcode(ABS, FAST, "Z0");
+                    gcode(ABS, FAST, "X0 Y0");
+                    break;
+                }
+                case 1: {
+                    // Done, I guess?
+                    break;
+                }
+                default:
+                    throw new UnsupportedOperationException("Invalid step number: " + stepNumber);
+            }
+        } catch (Exception e) {
+            resetProbe();
+            logger.log(Level.SEVERE, "Exception during cut cylinder shell operation.", e);
+        }
+    }
+
+
+    
+    
+    
+    
+    // Support functions
+    
+    private String f(double d) {
+        return Utils.formatter.format(d);
+    }
+    
     private void updateWCS(WorkCoordinateSystem wcs, Double x, Double y, Double z) throws Exception {
         StringBuilder sb = new StringBuilder();
         // Format the x, y, and z to prevent printing with double "E" notation.
@@ -575,8 +665,13 @@ public class ProbeService implements UGSEventListener {
     /**
      * Send a gcode command and handle any possible error.
      */
-    private void gcode(String s) throws Exception {
-        backend.sendGcodeCommand(true, s);
+    private void gcode(String... s) throws Exception {
+        StringBuilder sb = new StringBuilder();
+        sb.append(s[0]);
+        for (int i = 1; i < s.length; i++) {
+            sb.append(" " + s[i]);
+        }
+        backend.sendGcodeCommand(true, sb.toString());
     }
 
     /**
