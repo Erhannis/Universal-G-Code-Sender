@@ -151,6 +151,13 @@ public final class ProbeTopComponent extends TopComponent implements UGSEventLis
     private SpinnerNumberModel mocOtherSideModel;
     private final JButton measureOutsideCenter = new JButton("Measure outside center"); //RAINY Localization
 
+    // angle tab
+    private static final String ANGLE_TAB = "Angle";
+    private SpinnerNumberModel angleForwardDistanceModel;
+    private SpinnerNumberModel angleStrafeDistanceModel;
+    private SpinnerNumberModel angleStartingAngleModel;
+    private final JButton measureAngle = new JButton("Measure angle"); //RAINY Localization
+    
     // cuts tab
     private static final String CUTS_TAB = "Cut";
     private SpinnerNumberModel cutDiameterModel;
@@ -214,6 +221,10 @@ public final class ProbeTopComponent extends TopComponent implements UGSEventLis
         private double mocXYDistance;
         private double mocOtherSide;
 
+        private double angleForwardDistance;
+        private double angleStrafeDistance;
+        private double angleStartingAngle;
+        
         public double cutDiameter;
         public double cutLayerThicknessZ;
         public double cutDepthZ;
@@ -277,6 +288,11 @@ public final class ProbeTopComponent extends TopComponent implements UGSEventLis
         mocXYDistanceModel = new SpinnerNumberModel(50., -largeSpinner, largeSpinner, 0.1);
         mocOtherSideModel = new SpinnerNumberModel(100., -largeSpinner, largeSpinner, 0.1);
 
+        // ANGLE TAB
+        angleForwardDistanceModel = new SpinnerNumberModel(20., -largeSpinner, largeSpinner, 0.1);
+        angleStrafeDistanceModel = new SpinnerNumberModel(30., -largeSpinner, largeSpinner, 0.1);
+        angleStartingAngleModel = new SpinnerNumberModel(0., -largeSpinner, largeSpinner, 0.1); //THINK Restrict to 0-360?
+        
         // CUTS TAB
         cutDiameterModel = new SpinnerNumberModel(20., -largeSpinner, largeSpinner, 0.1);
         cutLayerThicknessZModel = new SpinnerNumberModel(2., -largeSpinner, largeSpinner, 0.1);
@@ -303,7 +319,9 @@ public final class ProbeTopComponent extends TopComponent implements UGSEventLis
                         0., 0., 0.,
                         0., 0., 0., 0.,
                         getDouble(settingsFastFindRate), getDouble(settingsSlowMeasureRate),
-                        getDouble(settingsRetractAmount), getUnits(), get(settingsWorkCoordinate));
+                        getDouble(settingsRetractAmount), getUnits(), get(settingsWorkCoordinate),
+                        null
+                );
                 this.cornerRenderable.setContext(pc, backend.getWorkPosition(), backend.getMachinePosition());
                 ps2.performXYZProbe(pc);
             });
@@ -317,7 +335,9 @@ public final class ProbeTopComponent extends TopComponent implements UGSEventLis
                         0., 0., 0.,
                         0., 0., 0., 0.,
                         getDouble(settingsFastFindRate), getDouble(settingsSlowMeasureRate),
-                        getDouble(settingsRetractAmount), getUnits(), get(settingsWorkCoordinate));
+                        getDouble(settingsRetractAmount), getUnits(), get(settingsWorkCoordinate),
+                        null
+                );
                 this.cornerRenderable.setContext(pc, backend.getWorkPosition(), backend.getMachinePosition());
                 ps2.performOutsideCornerProbe(pc);
             });
@@ -340,7 +360,9 @@ public final class ProbeTopComponent extends TopComponent implements UGSEventLis
                         0., 0., 0.,
                         0., 0., 0., 0.,
                         getDouble(settingsFastFindRate), getDouble(settingsSlowMeasureRate),
-                        getDouble(settingsRetractAmount), getUnits(), get(settingsWorkCoordinate));
+                        getDouble(settingsRetractAmount), getUnits(), get(settingsWorkCoordinate),
+                        null
+                );
                 this.zRenderable.setStart(backend.getWorkPosition());
                 ps2.performZProbe(pc);
             });
@@ -354,12 +376,35 @@ public final class ProbeTopComponent extends TopComponent implements UGSEventLis
                         getDouble(mocAngleModel), getDouble(mocXYDistanceModel), getDouble(mocOtherSideModel),
                         0., 0., 0., 0.,
                         getDouble(settingsFastFindRate), getDouble(settingsSlowMeasureRate),
-                        getDouble(settingsRetractAmount), getUnits(), get(settingsWorkCoordinate));
+                        getDouble(settingsRetractAmount), getUnits(), get(settingsWorkCoordinate),
+                        null
+                );
                 //DUMMY renderable
                 //this.zRenderable.setStart(backend.getWorkPosition());
                 ps2.performOutsideCenter(pc);
             });
 
+        measureAngle.addActionListener(e -> {
+                ProbeParameters pc = new ProbeParameters(
+                        getDouble(settingsProbeDiameter), backend.getMachinePosition(),
+                        0., 0., 0.,
+                        0., 0., 0., //DUMMY Offset
+                        0., 0., 0.,
+                        getDouble(angleStartingAngleModel), getDouble(angleForwardDistanceModel), getDouble(angleStrafeDistanceModel),
+                        0., 0., 0., 0.,
+                        getDouble(settingsFastFindRate), getDouble(settingsSlowMeasureRate),
+                        getDouble(settingsRetractAmount), getUnits(), get(settingsWorkCoordinate),
+                        (angle) -> {
+                            SwingUtilities.invokeLater(() -> {
+                                angleStartingAngleModel.setValue(angle);
+                            });
+                        }
+                );
+                //DUMMY renderable
+                //this.zRenderable.setStart(backend.getWorkPosition());
+                ps2.performMeasureAngle(pc);
+            });
+        
         cutCylinderShellButton.addActionListener(e -> {
                 ProbeParameters pc = new ProbeParameters(
                         getDouble(settingsProbeDiameter), backend.getMachinePosition(),
@@ -369,7 +414,9 @@ public final class ProbeTopComponent extends TopComponent implements UGSEventLis
                         0., 0., 0.,
                         getDouble(cutDiameterModel), getDouble(cutLayerThicknessZModel), getDouble(cutDepthZModel), getDouble(cutFeedRateModel),
                         getDouble(settingsFastFindRate), getDouble(settingsSlowMeasureRate),
-                        getDouble(settingsRetractAmount), getUnits(), get(settingsWorkCoordinate));
+                        getDouble(settingsRetractAmount), getUnits(), get(settingsWorkCoordinate),
+                        null
+                );
                 //DUMMY renderable //RAINY Show preview on hover over button?
                 //this.zRenderable.setStart(backend.getWorkPosition());
                 ps2.performCutCylinderShell(pc);
@@ -410,6 +457,10 @@ public final class ProbeTopComponent extends TopComponent implements UGSEventLis
         this.mocXYDistanceModel.addChangeListener(l -> controlChangeListener());
         this.mocOtherSideModel.addChangeListener(l -> controlChangeListener());
 
+        this.angleForwardDistanceModel.addChangeListener(l -> controlChangeListener());
+        this.angleStrafeDistanceModel.addChangeListener(l -> controlChangeListener());
+        this.angleStartingAngleModel.addChangeListener(l -> controlChangeListener());
+        
         this.cutDiameterModel.addChangeListener(l -> controlChangeListener());
         this.cutLayerThicknessZModel.addChangeListener(l -> controlChangeListener());
         this.cutDepthZModel.addChangeListener(l -> controlChangeListener());
@@ -455,6 +506,17 @@ public final class ProbeTopComponent extends TopComponent implements UGSEventLis
                 zRenderable.updateSpacing(getDouble(zProbeDistance), getDouble(zProbeOffset));
                 break;
             case OUTSIDE_CENTER_TAB:
+                //DUMMY
+//                active = cornerRenderable;
+//                cornerRenderable.updateSpacing(
+//                        getDouble(outsideXDistanceModel),
+//                        getDouble(outsideYDistanceModel),
+//                        0,
+//                        getDouble(outsideXOffsetModel),
+//                        getDouble(outsideYOffsetModel),
+//                        0);
+                break;
+            case ANGLE_TAB:
                 //DUMMY
 //                active = cornerRenderable;
 //                cornerRenderable.updateSpacing(
@@ -603,7 +665,19 @@ public final class ProbeTopComponent extends TopComponent implements UGSEventLis
 
         outsideCenter.add(measureOutsideCenter, "spanx 2, spany 2, growx, growy");
 
-        // OUTSIDE CENTER TAB
+        // ANGLE TAB
+        JPanel angle = new JPanel(new MigLayout("flowy, wrap 3"));
+        //RAINY Localization?
+        angle.add(new JLabel("Forward distance"));
+        angle.add(new JLabel("Sideways distance"));
+        angle.add(new JLabel("Starting angle")); //RAINY Tooltip explaining degrees, 0=X+, ccw
+        angle.add(new JSpinner(angleForwardDistanceModel), "growx");
+        angle.add(new JSpinner(angleStrafeDistanceModel), "growx");
+        angle.add(new JSpinner(angleStartingAngleModel), "growx");
+
+        angle.add(measureAngle, "spanx 2, spany 2, growx, growy");
+        
+        // CUTS TAB
         JPanel cuts = new JPanel(new MigLayout("flowy, wrap 4"));
         //RAINY Localization?
         cuts.add(new JLabel("Outer diameter")); //THINK Ooh.  You might be interested in INNER diameter.
@@ -642,6 +716,7 @@ public final class ProbeTopComponent extends TopComponent implements UGSEventLis
         jtp.add(Z_TAB, z);
         //jtp.add("inside", inside);
         jtp.add(OUTSIDE_CENTER_TAB, outsideCenter);
+        jtp.add(ANGLE_TAB, angle);
         jtp.add(CUTS_TAB, cuts);
         jtp.add(SETTINGS_TAB, settings);
 
@@ -706,6 +781,10 @@ public final class ProbeTopComponent extends TopComponent implements UGSEventLis
         ps.mocXYDistance = getDouble(mocXYDistanceModel);
         ps.mocOtherSide = getDouble(mocOtherSideModel);
 
+        ps.angleForwardDistance = getDouble(angleForwardDistanceModel);
+        ps.angleStrafeDistance = getDouble(angleStrafeDistanceModel);
+        ps.angleStartingAngle = getDouble(angleStartingAngleModel);
+        
         ps.cutDiameter = getDouble(cutDiameterModel);
         ps.cutLayerThicknessZ = getDouble(cutLayerThicknessZModel);
         ps.cutDepthZ = getDouble(cutDepthZModel);
@@ -762,6 +841,10 @@ public final class ProbeTopComponent extends TopComponent implements UGSEventLis
         mocXYDistanceModel.setValue(ps.mocXYDistance);
         mocOtherSideModel.setValue(ps.mocOtherSide);
 
+        angleForwardDistanceModel.setValue(ps.angleForwardDistance);
+        angleStrafeDistanceModel.setValue(ps.angleStrafeDistance);
+        angleStartingAngleModel.setValue(ps.angleStartingAngle);
+        
         cutDiameterModel.setValue(ps.cutDiameter);
         cutLayerThicknessZModel.setValue(ps.cutLayerThicknessZ);
         cutDepthZModel.setValue(ps.cutDepthZ);

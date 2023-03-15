@@ -14,7 +14,7 @@ visualization
 Probe intermittently goes in the wrong direction.  Seems consistent in a given program run?
 
 features
-  measure angle
+  *measure angle
   align with angle???
     (probably extensive changes, since grbl doesn't support rotation)
     (maybe I could restrict the scope)
@@ -25,6 +25,7 @@ features
     Permit manual jogging between sides?
   pitch
   more manual measurements - store as variables etc.
+  shape scanning??
 
 external features?
   bore

@@ -35,6 +35,8 @@ import com.willwinder.universalgcodesender.model.events.ProbeEvent;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -70,6 +72,7 @@ public class ProbeService implements UGSEventListener {
         //RAINY INSIDE_CENTER(N),
         //RAINY PITCH(N),
         CYLINDER_SHELL(0),
+        MEASURE_ANGLE(4),
         ;
 
         private final int numProbes;
@@ -118,6 +121,7 @@ public class ProbeService implements UGSEventListener {
         // Results
         public final Position startPosition;
         public Position endPosition;
+        private final Consumer<Object> callback; //SHAME Kinda bleh
 
         public ProbeParameters(double diameter, Position start,
                 double xSpacing, double ySpacing, double zSpacing,
@@ -126,7 +130,8 @@ public class ProbeService implements UGSEventListener {
                 double angle, double angleSpacing, double angleOtherSide,
                 double cutDiameter, double cutLayerThicknessZ, double cutDepthZ, double cutFeedRate,
                 double feedRate, double feedRateSlow, double retractAmount,
-                Units u, WorkCoordinateSystem wcs) {
+                Units u, WorkCoordinateSystem wcs,
+                Consumer callback) {
             this.endPosition = null;
             this.probeDiameter = diameter;
             this.startPosition = start;
@@ -151,6 +156,7 @@ public class ProbeService implements UGSEventListener {
             this.retractAmount = retractAmount;
             this.units = u;
             this.wcsToUpdate = wcs;
+            this.callback = callback;
         }
     }
 
@@ -431,24 +437,6 @@ public class ProbeService implements UGSEventListener {
             logger.log(Level.SEVERE, "Exception during XYZ probe operation.", e);
         }
     }
-
-    /**
-     * 
-     * @param angle In degrees
-     * @param distance In units
-     * @return e.g. " X0.5 Y-2.3441"
-     */
-    String angleToVector(double angle, double distance) {
-        return " X" + Utils.formatter.format(angleToX(angle, distance)) + " Y" + Utils.formatter.format(angleToY(angle, distance));
-    }
-
-    double angleToX(double angle, double distance) {
-        return distance*Math.cos(angle*2*Math.PI/360.0);
-    }
-
-    double angleToY(double angle, double distance) {
-        return distance*Math.sin(angle*2*Math.PI/360.0);
-    }
     
     void performOutsideCenter(ProbeParameters params) throws IllegalStateException {
         validateState();
@@ -562,6 +550,100 @@ public class ProbeService implements UGSEventListener {
             logger.log(Level.SEVERE, "Exception during XYZ probe operation.", e);
         }
     }
+
+    void performMeasureAngle(ProbeParameters params) throws IllegalStateException {
+        validateState();
+        currentOperation = ProbeOperation.MEASURE_ANGLE;
+        this.params = params;
+        performMeasureAngleInternal(0);
+    }
+    
+    /**
+     * Angle 0 = X+, goes counter-clockwise I guess??? //THINK Is that the most obvious default?
+     * @param stepNumber
+     * @throws IllegalStateException 
+     */
+    private void performMeasureAngleInternal(int stepNumber) throws IllegalStateException {
+        String g = GcodeUtils.unitCommand(params.units);
+
+        String g0Abs = "G90 " + g + " G0";
+        String g0Rel = "G91 " + g + " G0";
+        
+        /*
+        // Should find top?  Eh, let z-probe handle that //THINK ...Or SHOULD I?
+        
+        probe angle+
+        probe slow angle+
+        return 0
+        strafe ^angle+
+        probe angle+
+        probe slow angle+
+        return angle-
+        return 0?
+        */
+
+        continuation = () -> performMeasureAngleInternal(stepNumber + 1);
+        try {
+            switch (stepNumber) {
+                case 0: {
+                    // Reset (0,0,0) to make it easier to retract.
+                    updateWCS(params.wcsToUpdate, 0.0, 0.0, null);
+
+                    // Probe angle+
+                    probe(angleToVector(params.angle+90, params.angleSpacing), params.feedRate, params.units);
+                    break;
+                }
+                case 1: {
+                    // Retract angle-
+                    gcode(g0Rel + angleToVector(params.angle+90, retractDistance(params.angleSpacing, params.retractAmount)));
+                    // Probe angle+ slow
+                    probe(angleToVector(params.angle+90, params.angleSpacing), params.feedRateSlow, params.units);
+                    break;
+                }
+                case 2: {
+                    // Return to safe spot
+                    gcode(g0Abs + " X0.0 Y0.0");
+                    
+                    // Strafe
+                    gcode(g0Abs + angleToVector(params.angle, params.angleOtherSide));
+                    
+                    // Probe angle+
+                    probe(angleToVector(params.angle+90, params.angleSpacing), params.feedRate, params.units);
+                    break;
+                }
+                case 3: {
+                    // Retract angle-
+                    gcode(g0Rel + angleToVector(params.angle+90, retractDistance(params.angleSpacing, params.retractAmount)));
+                    // Probe angle+ slow
+                    probe(angleToVector(params.angle+90, params.angleSpacing), params.feedRateSlow, params.units);
+                    break;
+                }
+                case 4: {
+                    // Return
+                    gcode(g0Abs + angleToVector(params.angle, params.angleOtherSide));
+                    gcode(g0Abs + " X0.0 Y0.0"); //THINK Should we return to 0,0,0?  Seems a waste, but consistency...
+                    break;
+                }
+                case 5: {
+                    // Once idle, perform calculations.
+                    Preconditions.checkState(probePositions.size() == 4, "Unexpected number of probe positions.");
+
+                    Position probeA = probePositions.get(1).getPositionIn(params.units);
+                    Position probeB = probePositions.get(3).getPositionIn(params.units);
+                    double angle = Math.atan2(probeB.y-probeA.y, probeB.x-probeA.x)*360/(2*Math.PI);
+                    if (params.callback != null) {
+                        params.callback.accept(angle);
+                    }
+                    break;
+                }
+                default:
+                    throw new UnsupportedOperationException("Invalid step number: " + stepNumber);
+            }
+        } catch (Exception e) {
+            resetProbe();
+            logger.log(Level.SEVERE, "Exception during XYZ probe operation.", e);
+        }
+    }
     
     void performCutCylinderShell(ProbeParameters params) throws IllegalStateException {
         validateState();
@@ -630,13 +712,33 @@ public class ProbeService implements UGSEventListener {
             logger.log(Level.SEVERE, "Exception during cut cylinder shell operation.", e);
         }
     }
-
+    
+    
+    
 
     
     
     
     
     // Support functions
+
+    /**
+     * 
+     * @param angle In degrees
+     * @param distance In units
+     * @return e.g. " X0.5 Y-2.3441"
+     */
+    String angleToVector(double angle, double distance) {
+        return " X" + Utils.formatter.format(angleToX(angle, distance)) + " Y" + Utils.formatter.format(angleToY(angle, distance));
+    }
+
+    double angleToX(double angle, double distance) {
+        return distance*Math.cos(angle*2*Math.PI/360.0);
+    }
+
+    double angleToY(double angle, double distance) {
+        return distance*Math.sin(angle*2*Math.PI/360.0);
+    }
     
     private String f(double d) {
         return Utils.formatter.format(d);
