@@ -668,6 +668,8 @@ public class ProbeService implements UGSEventListener {
         String FAST = "G0"; //CHECK This seems to ignore feed entirely - does that get set somewhere at some point, or is it wholly independent of our config?
         String SLOW = "G1";
         String ARC = params.cutCCW ? "G3" : "G2";
+        
+        boolean helix = true; //RAINY Optionize
                 
         continuation = () -> performCutCylinderShellInternal(stepNumber + 1);
         try {
@@ -688,23 +690,54 @@ public class ProbeService implements UGSEventListener {
                     //THINK The extra negatives are a bit weird
                     //CHECK How much gcode can we send at once?  Can/should we break it up?
                     double z = 0;
-                    while (true) {
-                        if (z <= -params.cutDepthZ) {
-                            break;
+                    
+                    if (helix) {
+                        while (true) {
+                            if (z <= -params.cutDepthZ) {
+                                break;
+                            }
+                            double target;
+                            if ((z - (-params.cutDepthZ)) < params.cutLayerThicknessZ) {
+                                target = -params.cutDepthZ;
+                            } else {
+                                target = z - params.cutLayerThicknessZ;
+                            }
+                            // One half of the cut
+                            gcode(ARC,"X"+f(0),"Y"+f(-r),"I"+f(0),"J"+f(-r),"Z"+f((z+target)/2),"F"+f(params.cutFeedRate));
+                            // Second half
+                            gcode(ARC,"X"+f(0),"Y"+f(r),"I"+f(0),"J"+f(r),"Z"+f(target),"F"+f(params.cutFeedRate));
+                            z = target;
                         }
-                        if ((z - (-params.cutDepthZ)) < params.cutLayerThicknessZ) {
-                            gcode(ABS, SLOW, "Z"+f(-params.cutDepthZ), "F"+f(params.cutFeedRate));
-                            z = -params.cutDepthZ;
-                        } else {
-                            gcode(REL, SLOW, "Z"+f(-params.cutLayerThicknessZ), "F"+f(params.cutFeedRate));
-                            z -= params.cutLayerThicknessZ;
+                        // We want a final flat cut at bottom depth
+                        // One half of the cut
+                        gcode(ARC,"X"+f(0),"Y"+f(-r),"I"+f(0),"J"+f(-r),"F"+f(params.cutFeedRate));
+                        // Second half
+                        gcode(ARC,"X"+f(0),"Y"+f(r),"I"+f(0),"J"+f(r),"F"+f(params.cutFeedRate));
+                    } else {
+                        while (true) {
+                            if ((z - (-params.cutDepthZ)) < params.cutLayerThicknessZ) {
+                                gcode(ABS, SLOW, "Z"+f(-params.cutDepthZ), "F"+f(params.cutFeedRate));
+                                z = -params.cutDepthZ;
+                            } else {
+                                gcode(REL, SLOW, "Z"+f(-params.cutLayerThicknessZ), "F"+f(params.cutFeedRate));
+                                z -= params.cutLayerThicknessZ;
+                            }
+                            if (z <= -params.cutDepthZ) {
+                                break;
+                            }
+                            // One half of the cut
+                            gcode(ARC,"X"+f(0),"Y"+f(-r),"I"+f(0),"J"+f(-r),"F"+f(params.cutFeedRate));
+                            // Second half
+                            gcode(ARC,"X"+f(0),"Y"+f(r),"I"+f(0),"J"+f(r),"F"+f(params.cutFeedRate));
                         }
+                        // We want a final cut at bottom depth
                         // One half of the cut
                         gcode(ARC,"X"+f(0),"Y"+f(-r),"I"+f(0),"J"+f(-r),"F"+f(params.cutFeedRate));
                         // Second half
                         gcode(ARC,"X"+f(0),"Y"+f(r),"I"+f(0),"J"+f(r),"F"+f(params.cutFeedRate));
                     }
                     
+                    // Return
                     gcode(ABS, FAST, "Z0");
                     gcode(ABS, FAST, "X0 Y0");
                     break;
