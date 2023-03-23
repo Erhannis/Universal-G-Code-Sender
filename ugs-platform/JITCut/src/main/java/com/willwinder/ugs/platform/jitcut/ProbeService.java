@@ -71,8 +71,9 @@ public class ProbeService implements UGSEventListener {
         OUTSIDE_CENTER(4),
         //RAINY INSIDE_CENTER(N),
         //RAINY PITCH(N),
-        CYLINDER_SHELL(0),
         MEASURE_ANGLE(4),
+        CYLINDER_SHELL(0),
+        MOVE_XP(0),
         ;
 
         private final int numProbes;
@@ -112,6 +113,7 @@ public class ProbeService implements UGSEventListener {
         public final double cutLayerThicknessZ;
         public final double cutDepthZ;
         public final double cutFeedRate; //THINK Separate parameter for Z/XY?
+        public final boolean cutCCW;
         public final double feedRate;
         public final double feedRateSlow;
         public final double retractAmount;
@@ -128,7 +130,7 @@ public class ProbeService implements UGSEventListener {
                 double xOffset, double yOffset, double zOffset,
                 double xPush, double yPush, double zPush,
                 double angle, double angleSpacing, double angleOtherSide,
-                double cutDiameter, double cutLayerThicknessZ, double cutDepthZ, double cutFeedRate,
+                double cutDiameter, double cutLayerThicknessZ, double cutDepthZ, double cutFeedRate, boolean cutCCW,
                 double feedRate, double feedRateSlow, double retractAmount,
                 Units u, WorkCoordinateSystem wcs,
                 Consumer callback) {
@@ -151,6 +153,7 @@ public class ProbeService implements UGSEventListener {
             this.cutLayerThicknessZ = cutLayerThicknessZ;
             this.cutDepthZ = cutDepthZ;
             this.cutFeedRate = cutFeedRate;
+            this.cutCCW = cutCCW;
             this.feedRate = feedRate;
             this.feedRateSlow = feedRateSlow;
             this.retractAmount = retractAmount;
@@ -535,6 +538,11 @@ public class ProbeService implements UGSEventListener {
                     double xCenter = (xPosA+xPosB)/2;
                     double yCenter = (yPosA+yPosB)/2;
                     
+                    double dx = (xPosB-xPosA);
+                    double dy = (yPosB-yPosA);
+                    double dist = Math.sqrt((dx*dx)+(dy*dy));
+                    System.out.println("Distance: " + dist);
+                    
                     Position startPositionInUnits = params.startPosition.getPositionIn(params.units);
                     updateWCS(params.wcsToUpdate,
                             startPositionInUnits.x - xCenter,
@@ -641,7 +649,7 @@ public class ProbeService implements UGSEventListener {
             }
         } catch (Exception e) {
             resetProbe();
-            logger.log(Level.SEVERE, "Exception during XYZ probe operation.", e);
+            logger.log(Level.SEVERE, "Exception during measure angle operation.", e);
         }
     }
     
@@ -659,6 +667,7 @@ public class ProbeService implements UGSEventListener {
         String REL = "G91 " + u;
         String FAST = "G0"; //CHECK This seems to ignore feed entirely - does that get set somewhere at some point, or is it wholly independent of our config?
         String SLOW = "G1";
+        String ARC = params.cutCCW ? "G3" : "G2";
                 
         continuation = () -> performCutCylinderShellInternal(stepNumber + 1);
         try {
@@ -691,9 +700,9 @@ public class ProbeService implements UGSEventListener {
                             z -= params.cutLayerThicknessZ;
                         }
                         // One half of the cut
-                        gcode("G2","X"+f(0),"Y"+f(-r),"I"+f(0),"J"+f(-r),"F"+f(params.cutFeedRate));
+                        gcode(ARC,"X"+f(0),"Y"+f(-r),"I"+f(0),"J"+f(-r),"F"+f(params.cutFeedRate));
                         // Second half
-                        gcode("G2","X"+f(0),"Y"+f(r),"I"+f(0),"J"+f(r),"F"+f(params.cutFeedRate));
+                        gcode(ARC,"X"+f(0),"Y"+f(r),"I"+f(0),"J"+f(r),"F"+f(params.cutFeedRate));
                     }
                     
                     gcode(ABS, FAST, "Z0");
@@ -710,6 +719,47 @@ public class ProbeService implements UGSEventListener {
         } catch (Exception e) {
             resetProbe();
             logger.log(Level.SEVERE, "Exception during cut cylinder shell operation.", e);
+        }
+    }
+
+    void performMoveXPlus(ProbeParameters params) throws IllegalStateException {
+        validateState();
+        currentOperation = ProbeOperation.MOVE_XP;
+        this.params = params;
+        performMoveXPlusInternal(0);
+    }
+    
+    /**
+     * Angle 0 = X+, goes counter-clockwise I guess??? //THINK Is that the most obvious default?
+     * @param stepNumber
+     * @throws IllegalStateException 
+     */
+    private void performMoveXPlusInternal(int stepNumber) throws IllegalStateException {
+        String u = GcodeUtils.unitCommand(params.units);
+
+        String ABS = "G90 " + u;
+        String REL = "G91 " + u;
+        String FAST = "G0"; //CHECK This seems to ignore feed entirely - does that get set somewhere at some point, or is it wholly independent of our config?
+        String SLOW = "G1";
+        
+        continuation = () -> performMoveXPlusInternal(stepNumber + 1);
+        try {
+            switch (stepNumber) {
+                case 0: {
+                    // Move angle+
+                    gcode(REL, SLOW, angleToVector(params.angle, params.xSpacing), "F"+params.feedRate);
+                    break;
+                }
+                case 1: {
+                    // Done?
+                    break;
+                }
+                default:
+                    throw new UnsupportedOperationException("Invalid step number: " + stepNumber);
+            }
+        } catch (Exception e) {
+            resetProbe();
+            logger.log(Level.SEVERE, "Exception during move operation.", e);
         }
     }
     
@@ -811,7 +861,9 @@ public class ProbeService implements UGSEventListener {
                 }
             }
         } else if (evt instanceof ProbeEvent) {
-            this.probePositions.add(((ProbeEvent)evt).getProbePosition());
+            Position position = ((ProbeEvent)evt).getProbePosition();
+            System.out.println("(ProbeEvent).getProbePosition: " + position);
+            this.probePositions.add(position);
             try {
                 continuation.execute();
             } catch (Exception e) {

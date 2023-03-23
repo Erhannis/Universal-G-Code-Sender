@@ -25,6 +25,8 @@ features
     Permit manual jogging between sides?
   pitch
   more manual measurements - store as variables etc.
+    extend rotation to rest of pgm?  o_o
+    support 3dof rotation?
   shape scanning??
 
 external features?
