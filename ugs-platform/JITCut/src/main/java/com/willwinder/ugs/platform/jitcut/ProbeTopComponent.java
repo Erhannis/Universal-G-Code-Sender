@@ -165,7 +165,9 @@ public final class ProbeTopComponent extends TopComponent implements UGSEventLis
     private SpinnerNumberModel cutDepthZModel;
     private SpinnerNumberModel cutFeedRateModel; //RAINY Merge into settings?
     private ButtonModel cutCCWModel;
-    private final JButton cutCylinderShellButton = new JButton("Cut cylinder shell"); //RAINY Localization
+    private final JButton cutCylinderFromInsideShellButton = new JButton("Cut cylinder shell from inside"); //RAINY Localization
+    private final JButton cutCylinderOnDiameterShellButton = new JButton("Cut cylinder shell on diameter"); //RAINY Localization
+    private final JButton cutCylinderFromOutsideShellButton = new JButton("Cut cylinder shell from outside"); //RAINY Localization
 
     // move tab //RAINY Document - Axes are aligned at angle 0, etc.
     private static final String MOVE_TAB = "Move";
@@ -425,7 +427,24 @@ public final class ProbeTopComponent extends TopComponent implements UGSEventLis
                 ps2.performMeasureAngle(pc);
             });
         
-        cutCylinderShellButton.addActionListener(e -> {
+        cutCylinderFromInsideShellButton.addActionListener(e -> {
+                ProbeParameters pc = new ProbeParameters(
+                        getDouble(settingsProbeDiameter), backend.getMachinePosition(),
+                        0., 0., getDouble(mocZDistanceModel),
+                        0., 0., 0., //DUMMY Offset
+                        0., 0., 0.,
+                        0., 0., 0.,
+                        getDouble(cutDiameterModel)-getDouble(settingsProbeDiameter), getDouble(cutLayerThicknessZModel), getDouble(cutDepthZModel), getDouble(cutFeedRateModel), cutCCWModel.isSelected(),
+                        getDouble(settingsFastFindRate), getDouble(settingsSlowMeasureRate),
+                        getDouble(settingsRetractAmount), getUnits(), get(settingsWorkCoordinate),
+                        null
+                );
+                //DUMMY renderable //RAINY Show preview on hover over button?
+                //this.zRenderable.setStart(backend.getWorkPosition());
+                ps2.performCutCylinderShell(pc);
+            });
+
+        cutCylinderOnDiameterShellButton.addActionListener(e -> {
                 ProbeParameters pc = new ProbeParameters(
                         getDouble(settingsProbeDiameter), backend.getMachinePosition(),
                         0., 0., getDouble(mocZDistanceModel),
@@ -441,7 +460,24 @@ public final class ProbeTopComponent extends TopComponent implements UGSEventLis
                 //this.zRenderable.setStart(backend.getWorkPosition());
                 ps2.performCutCylinderShell(pc);
             });
-
+        
+        cutCylinderFromOutsideShellButton.addActionListener(e -> {
+                ProbeParameters pc = new ProbeParameters(
+                        getDouble(settingsProbeDiameter), backend.getMachinePosition(),
+                        0., 0., getDouble(mocZDistanceModel),
+                        0., 0., 0., //DUMMY Offset
+                        0., 0., 0.,
+                        0., 0., 0.,
+                        getDouble(cutDiameterModel)+getDouble(settingsProbeDiameter), getDouble(cutLayerThicknessZModel), getDouble(cutDepthZModel), getDouble(cutFeedRateModel), cutCCWModel.isSelected(),
+                        getDouble(settingsFastFindRate), getDouble(settingsSlowMeasureRate),
+                        getDouble(settingsRetractAmount), getUnits(), get(settingsWorkCoordinate),
+                        null
+                );
+                //DUMMY renderable //RAINY Show preview on hover over button?
+                //this.zRenderable.setStart(backend.getWorkPosition());
+                ps2.performCutCylinderShell(pc);
+            });
+        
         { // Move
             // Everything just uses performMoveXPlus with different angles
             
@@ -661,7 +697,9 @@ public final class ProbeTopComponent extends TopComponent implements UGSEventLis
         this.measureOutsideCenter.setEnabled(enabled);
         this.zProbeButton.setEnabled(enabled);
         this.measureAngle.setEnabled(enabled);
-        this.cutCylinderShellButton.setEnabled(enabled);
+        this.cutCylinderFromInsideShellButton.setEnabled(enabled);
+        this.cutCylinderOnDiameterShellButton.setEnabled(enabled);
+        this.cutCylinderFromOutsideShellButton.setEnabled(enabled);
         this.moveXMinusButton.setEnabled(enabled);
         this.moveXPlusButton.setEnabled(enabled);
         this.moveYMinusButton.setEnabled(enabled);
@@ -790,7 +828,7 @@ public final class ProbeTopComponent extends TopComponent implements UGSEventLis
         // CUTS TAB
         JPanel cuts = new JPanel(new MigLayout("flowy, wrap 5"));
         //RAINY Localization?
-        cuts.add(new JLabel("Outer diameter")); //THINK Ooh.  You might be interested in INNER diameter.
+        cuts.add(new JLabel("Diameter"));
         cuts.add(new JLabel("Layer thickness Z"));
         cuts.add(new JLabel("Depth Z")); //RAINY Tooltip explaining degrees, 0=X+, ccw
         cuts.add(new JLabel("Cut feed rate"));
@@ -804,7 +842,9 @@ public final class ProbeTopComponent extends TopComponent implements UGSEventLis
         cuts.add(new JSpinner(cutFeedRateModel), "growx");
         cuts.add(new JLabel(""));
 
-        cuts.add(cutCylinderShellButton, "spanx 2, spany 1, growx, growy");
+        cuts.add(cutCylinderFromInsideShellButton, "spanx 2, spany 1, growx, growy");
+        cuts.add(cutCylinderOnDiameterShellButton, "spanx 2, spany 1, growx, growy");
+        cuts.add(cutCylinderFromOutsideShellButton, "spanx 2, spany 1, growx, growy");
 
         // MOVE TAB
         JPanel move = new JPanel(new MigLayout("flowy, wrap 3"));

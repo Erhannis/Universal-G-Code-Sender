@@ -670,6 +670,7 @@ public class ProbeService implements UGSEventListener {
         String ARC = params.cutCCW ? "G3" : "G2";
         
         boolean helix = true; //RAINY Optionize
+        int finalPasses = 2; // If < 1, probably won't actually finish cutting.  //RAINY Optionize
                 
         continuation = () -> performCutCylinderShellInternal(stepNumber + 1);
         try {
@@ -680,8 +681,8 @@ public class ProbeService implements UGSEventListener {
 
                     //RAINY This "have one params class for everything" is feeling more and more incorrect
                     //THINK Should offset be factored in, or no?
-                    
-                    double r = (params.cutDiameter / 2) - (params.probeDiameter / 2);
+
+                    double r = params.cutDiameter / 2; // Compensation for tool diameter is done when setting params
                     
                     // CW Arc
                     //THINK Apply rotations?
@@ -709,10 +710,12 @@ public class ProbeService implements UGSEventListener {
                             z = target;
                         }
                         // We want a final flat cut at bottom depth
-                        // One half of the cut
-                        gcode(ARC,"X"+f(0),"Y"+f(-r),"I"+f(0),"J"+f(-r),"F"+f(params.cutFeedRate));
-                        // Second half
-                        gcode(ARC,"X"+f(0),"Y"+f(r),"I"+f(0),"J"+f(r),"F"+f(params.cutFeedRate));
+                        for (int i = 0; i < finalPasses; i++) {
+                            // One half of the cut
+                            gcode(ARC,"X"+f(0),"Y"+f(-r),"I"+f(0),"J"+f(-r),"F"+f(params.cutFeedRate));
+                            // Second half
+                            gcode(ARC,"X"+f(0),"Y"+f(r),"I"+f(0),"J"+f(r),"F"+f(params.cutFeedRate));
+                        }
                     } else {
                         while (true) {
                             if ((z - (-params.cutDepthZ)) < params.cutLayerThicknessZ) {
@@ -725,10 +728,12 @@ public class ProbeService implements UGSEventListener {
                             if (z <= -params.cutDepthZ) {
                                 break;
                             }
-                            // One half of the cut
-                            gcode(ARC,"X"+f(0),"Y"+f(-r),"I"+f(0),"J"+f(-r),"F"+f(params.cutFeedRate));
-                            // Second half
-                            gcode(ARC,"X"+f(0),"Y"+f(r),"I"+f(0),"J"+f(r),"F"+f(params.cutFeedRate));
+                            for (int i = 0; i < finalPasses; i++) {
+                                // One half of the cut
+                                gcode(ARC,"X"+f(0),"Y"+f(-r),"I"+f(0),"J"+f(-r),"F"+f(params.cutFeedRate));
+                                // Second half
+                                gcode(ARC,"X"+f(0),"Y"+f(r),"I"+f(0),"J"+f(r),"F"+f(params.cutFeedRate));
+                            }
                         }
                         // We want a final cut at bottom depth
                         // One half of the cut
