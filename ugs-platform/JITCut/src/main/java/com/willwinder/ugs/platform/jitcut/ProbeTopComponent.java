@@ -177,6 +177,18 @@ public final class ProbeTopComponent extends TopComponent implements UGSEventLis
     private final JButton moveXMinusButton = new JButton("X-"); //RAINY Localization
     private final JButton moveYPlusButton = new JButton("Y+"); //RAINY Localization
     private final JButton moveYMinusButton = new JButton("Y-"); //RAINY Localization
+
+    // lathe tab //THINK Should this even be in the same list as the others here?
+    private static final String LATHE_TAB = "Lathe";
+    private SpinnerNumberModel latheZSizeModel;
+    private SpinnerNumberModel latheLayerThicknessModel;
+    private SpinnerNumberModel latheXSizeModel;
+    private SpinnerNumberModel latheTaperAngleModel;
+    private SpinnerNumberModel latheFeedRateModel; //RAINY Merge into settings?
+    private final JButton latheRoundFaceButton = new JButton("Round face"); //RAINY Localization
+    private final JButton latheFlatFaceButton = new JButton("Flat face"); //RAINY Localization
+    //THINK Choose approach direction for taper?  Or maybe that's part of the "use X" thing?
+    private final JButton latheTaperButton = new JButton("Taper (use X)"); //RAINY Localization
     
     // settings
     private JComboBox<WorkCoordinateSystem> settingsWorkCoordinate;
@@ -245,6 +257,12 @@ public final class ProbeTopComponent extends TopComponent implements UGSEventLis
 
         public double moveDistance;
         public double moveAddAngle;
+        
+        private double latheZSize;
+        private double latheLayerThickness;
+        private double latheXSize;
+        private double latheTaperAngle;
+        private double latheFeedRate;
         
         private int settingsWorkCoordinateIdx;
         private int settingsUnitsIdx;
@@ -320,6 +338,14 @@ public final class ProbeTopComponent extends TopComponent implements UGSEventLis
         // MOVE TAB
         moveDistanceModel = new SpinnerNumberModel(10., -largeSpinner, largeSpinner, 0.1);
         moveAddAngleModel = new SpinnerNumberModel(0., -largeSpinner, largeSpinner, 0.1); //DITTO
+
+        // LATHE TAB
+        latheZSizeModel = new SpinnerNumberModel(10., -largeSpinner, largeSpinner, 0.1);
+        latheLayerThicknessModel = new SpinnerNumberModel(0.2, -largeSpinner, largeSpinner, 0.1);
+        latheXSizeModel = new SpinnerNumberModel(1., -largeSpinner, largeSpinner, 0.1);
+        latheTaperAngleModel = new SpinnerNumberModel(45., -largeSpinner, largeSpinner, 0.1); //THINK Restrict to 0-360?
+        //THINK Separate feed rate for X?  Seemed fast in one dir vs the other
+        latheFeedRateModel = new SpinnerNumberModel(100., -largeSpinner, largeSpinner, 0.1);
         
         // SETTINGS TAB
         settingsWorkCoordinate = new JComboBox<>(new WorkCoordinateSystem[]{G54, G55, G56, G57, G58, G59});
@@ -547,6 +573,59 @@ public final class ProbeTopComponent extends TopComponent implements UGSEventLis
                 });
         }
         
+        { // Lathe
+            latheRoundFaceButton.addActionListener(e -> {
+                    ProbeParameters pc = new ProbeParameters(
+                            getDouble(settingsProbeDiameter), backend.getMachinePosition(),
+                            getDouble(latheXSizeModel), 0., getDouble(latheZSizeModel),
+                            0., 0., 0., //DUMMY Offset
+                            0., 0., 0.,
+                            getDouble(latheTaperAngleModel), 0., 0.,
+                            0., getDouble(latheLayerThicknessModel), 0., getDouble(latheFeedRateModel), false,
+                            getDouble(settingsFastFindRate), getDouble(settingsSlowMeasureRate),
+                            getDouble(settingsRetractAmount), getUnits(), get(settingsWorkCoordinate),
+                            null
+                    );
+                    //DUMMY renderable //RAINY Show preview on hover over button?
+                    //this.zRenderable.setStart(backend.getWorkPosition());
+                    ps2.performLatheRoundFace(pc);
+                });
+
+            latheFlatFaceButton.addActionListener(e -> {
+                    ProbeParameters pc = new ProbeParameters(
+                            getDouble(settingsProbeDiameter), backend.getMachinePosition(),
+                            getDouble(latheXSizeModel), 0., getDouble(latheZSizeModel),
+                            0., 0., 0., //DUMMY Offset
+                            0., 0., 0.,
+                            getDouble(latheTaperAngleModel), 0., 0.,
+                            0., getDouble(latheLayerThicknessModel), 0., getDouble(latheFeedRateModel), false,
+                            getDouble(settingsFastFindRate), getDouble(settingsSlowMeasureRate),
+                            getDouble(settingsRetractAmount), getUnits(), get(settingsWorkCoordinate),
+                            null
+                    );
+                    //DUMMY renderable //RAINY Show preview on hover over button?
+                    //this.zRenderable.setStart(backend.getWorkPosition());
+                    ps2.performLatheFlatFace(pc);
+                });
+
+            latheTaperButton.addActionListener(e -> {
+                    ProbeParameters pc = new ProbeParameters(
+                            getDouble(settingsProbeDiameter), backend.getMachinePosition(),
+                            getDouble(latheXSizeModel), 0., getDouble(latheZSizeModel),
+                            0., 0., 0., //DUMMY Offset
+                            0., 0., 0.,
+                            getDouble(latheTaperAngleModel), 0., 0.,
+                            0., getDouble(latheLayerThicknessModel), 0., getDouble(latheFeedRateModel), false,
+                            getDouble(settingsFastFindRate), getDouble(settingsSlowMeasureRate),
+                            getDouble(settingsRetractAmount), getUnits(), get(settingsWorkCoordinate),
+                            null
+                    );
+                    //DUMMY renderable //RAINY Show preview on hover over button?
+                    //this.zRenderable.setStart(backend.getWorkPosition());
+                    ps2.performLatheTaper(pc);
+                });
+        }
+        
         initComponents();
         updateControls();
 
@@ -678,6 +757,17 @@ public final class ProbeTopComponent extends TopComponent implements UGSEventLis
 //                        getDouble(outsideYOffsetModel),
 //                        0);
                 break;
+            case LATHE_TAB:
+                //DUMMY
+//                active = cornerRenderable;
+//                cornerRenderable.updateSpacing(
+//                        getDouble(outsideXDistanceModel),
+//                        getDouble(outsideYDistanceModel),
+//                        0,
+//                        getDouble(outsideXOffsetModel),
+//                        getDouble(outsideYOffsetModel),
+//                        0);
+                break;
             case SETTINGS_TAB:
                 active = null;
                 break;
@@ -704,6 +794,9 @@ public final class ProbeTopComponent extends TopComponent implements UGSEventLis
         this.moveXPlusButton.setEnabled(enabled);
         this.moveYMinusButton.setEnabled(enabled);
         this.moveYPlusButton.setEnabled(enabled);
+        this.latheRoundFaceButton.setEnabled(enabled);
+        this.latheFlatFaceButton.setEnabled(enabled);
+        this.latheTaperButton.setEnabled(enabled);        
     }
 
     @Override
@@ -866,6 +959,26 @@ public final class ProbeTopComponent extends TopComponent implements UGSEventLis
         move.add(new JButton(), "spanx 1, spany 1, growx, growy");
         move.add(moveXPlusButton, "spanx 1, spany 1, growx, growy");
         move.add(new JButton(), "spanx 1, spany 1, growx, growy");
+
+        // MOVE TAB
+        JPanel lathe = new JPanel(new MigLayout("flowy, wrap 5"));
+                
+        //RAINY Localization?
+        lathe.add(new JLabel("Z size"));
+        lathe.add(new JLabel("X size"));
+        lathe.add(new JLabel("Layer thickness"));
+        lathe.add(new JLabel("Taper angle")); //DITTO
+        lathe.add(new JLabel("Feedrate")); //DITTO
+        lathe.add(new JSpinner(latheZSizeModel), "growx");
+        lathe.add(new JSpinner(latheXSizeModel), "growx");
+        lathe.add(new JSpinner(latheLayerThicknessModel), "growx");
+        lathe.add(new JSpinner(latheTaperAngleModel), "growx");
+        lathe.add(new JSpinner(latheFeedRateModel), "growx");
+        //THINK Mention feedrate?
+
+        lathe.add(latheRoundFaceButton, "spanx 1, spany 1, growx, growy");
+        lathe.add(latheFlatFaceButton, "spanx 1, spany 1, growx, growy");
+        lathe.add(latheTaperButton, "spanx 1, spany 1, growx, growy");
         
         // SETTINGS TAB
         JPanel settings = new JPanel(new MigLayout("wrap 6"));
@@ -895,6 +1008,7 @@ public final class ProbeTopComponent extends TopComponent implements UGSEventLis
         jtp.add(ANGLE_TAB, angle);
         jtp.add(CUTS_TAB, cuts);
         jtp.add(MOVE_TAB, move);
+        jtp.add(LATHE_TAB, lathe);
         jtp.add(SETTINGS_TAB, settings);
 
         this.setLayout(new BorderLayout());
@@ -971,6 +1085,12 @@ public final class ProbeTopComponent extends TopComponent implements UGSEventLis
         ps.moveDistance = getDouble(moveDistanceModel);
         ps.moveAddAngle = getDouble(moveAddAngleModel);
 
+        ps.latheZSize = getDouble(latheZSizeModel);
+        ps.latheLayerThickness = getDouble(latheLayerThicknessModel);
+        ps.latheXSize = getDouble(latheXSizeModel);
+        ps.latheTaperAngle = getDouble(latheTaperAngleModel);
+        ps.latheFeedRate = getDouble(latheFeedRateModel);
+        
         ps.settingsWorkCoordinateIdx = settingsWorkCoordinate.getSelectedIndex();
         ps.settingsUnitsIdx = settingsUnits.getSelectedIndex();
         ps.settingsProbeDiameter = getDouble(settingsProbeDiameter);
@@ -1035,6 +1155,12 @@ public final class ProbeTopComponent extends TopComponent implements UGSEventLis
         moveDistanceModel.setValue(ps.moveDistance);
         moveAddAngleModel.setValue(ps.moveAddAngle);
 
+        latheZSizeModel.setValue(ps.latheZSize);
+        latheLayerThicknessModel.setValue(ps.latheLayerThickness);
+        latheXSizeModel.setValue(ps.latheXSize);
+        latheTaperAngleModel.setValue(ps.latheTaperAngle);
+        latheFeedRateModel.setValue(ps.latheFeedRate);
+        
         settingsWorkCoordinate.setSelectedIndex(ps.settingsWorkCoordinateIdx);
         settingsUnits.setSelectedIndex(ps.settingsUnitsIdx);
         settingsProbeDiameter.setValue(ps.settingsProbeDiameter);

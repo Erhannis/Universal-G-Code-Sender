@@ -827,6 +827,31 @@ public class ProbeService implements UGSEventListener {
     double angleToY(double angle, double distance) {
         return distance*Math.sin(angle*2*Math.PI/360.0);
     }
+
+    // https://math.stackexchange.com/a/4000949
+    Position findXYCircleCenter(Position a, Position b, Position c) {
+        //MISC Could check the points are all on one plane....
+        double x1 = a.x;
+        double x21 = x1*x1;
+        double y1 = a.y;
+        double y21 = y1*y1;
+        double x2 = b.x;
+        double x22 = x2*x2;
+        double y2 = b.y;
+        double y22 = y2*y2;
+        double x3 = c.x;
+        double x23 = x3*x3;
+        double y3 = c.y;
+        double y23 = y3*y3;
+        double A = x1*(y2-y3)-y1*(x2-x3)+x2*y3-x3*y2;
+        double B = (x21+y21)*(y3-y2)+(x22+y22)*(y1-y3)+(x23+y23)*(y2-y1);
+        double C = (x21+y21)*(x2-x3)+(x22+y22)*(x3-x1)+(x23+y23)*(x1-x2);
+        double D = (x21+y21)*(x3*y2-x2*y3)+(x22+y22)*(x1*y3-x3*y1)+(x23+y23)*(x2*y1-x1*y2);
+        double xc = -B/(2*A);
+        double yc = -C/(2*A);
+        double r = Math.sqrt((B*B+C*C-4*A*D)/(4*A*A));
+        return new Position(xc, yc, a.z); //MISC a.z seems slightly better than 0....
+    }
     
     private String f(double d) {
         return Utils.formatter.format(d);

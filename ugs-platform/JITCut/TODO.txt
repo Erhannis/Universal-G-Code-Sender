@@ -35,4 +35,14 @@ external features?
     x
     (cylinder, square, cube?)
      
+
+lathe
+  probe find center against flat surface jig thing?
+  round facing
+  flat facing
+  taper
+  chamfer
+    a form of taper?
   
+
+goto x zero, y zero, z zero
