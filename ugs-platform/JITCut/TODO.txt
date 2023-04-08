@@ -34,7 +34,10 @@ external features?
     (shell, solid)
     x
     (cylinder, square, cube?)
-     
+
+probe
+  x, y, z
+  arbitrary dir
 
 lathe
   probe find center against flat surface jig thing?
@@ -46,3 +49,5 @@ lathe
   
 
 goto x zero, y zero, z zero
+
+standardize directions (annotate labels)

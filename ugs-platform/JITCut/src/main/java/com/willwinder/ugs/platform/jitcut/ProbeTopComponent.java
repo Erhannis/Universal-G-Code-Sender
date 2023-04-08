@@ -188,7 +188,9 @@ public final class ProbeTopComponent extends TopComponent implements UGSEventLis
     private final JButton latheRoundFaceButton = new JButton("Round face"); //RAINY Localization
     private final JButton latheFlatFaceButton = new JButton("Flat face"); //RAINY Localization
     //THINK Choose approach direction for taper?  Or maybe that's part of the "use X" thing?
-    private final JButton latheTaperButton = new JButton("Taper (use X)"); //RAINY Localization
+    // I think this does a round face at an angle...but only a triangular section.  It's truncated on Z+ and X-.
+    //THINK What about inner tapers?
+    private final JButton latheTaperButton = new JButton("Taper (use Z)"); //RAINY Localization
     
     // settings
     private JComboBox<WorkCoordinateSystem> settingsWorkCoordinate;
@@ -340,7 +342,7 @@ public final class ProbeTopComponent extends TopComponent implements UGSEventLis
         moveAddAngleModel = new SpinnerNumberModel(0., -largeSpinner, largeSpinner, 0.1); //DITTO
 
         // LATHE TAB
-        latheZSizeModel = new SpinnerNumberModel(10., -largeSpinner, largeSpinner, 0.1);
+        latheZSizeModel = new SpinnerNumberModel(-10., -largeSpinner, largeSpinner, 0.1); //RAINY Standardize all these values etc., annotate
         latheLayerThicknessModel = new SpinnerNumberModel(0.2, -largeSpinner, largeSpinner, 0.1);
         latheXSizeModel = new SpinnerNumberModel(1., -largeSpinner, largeSpinner, 0.1);
         latheTaperAngleModel = new SpinnerNumberModel(45., -largeSpinner, largeSpinner, 0.1); //THINK Restrict to 0-360?

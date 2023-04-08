@@ -74,6 +74,9 @@ public class ProbeService implements UGSEventListener {
         MEASURE_ANGLE(4),
         CYLINDER_SHELL(0),
         MOVE_XP(0),
+        LATHE_ROUND_FACE(0),
+        LATHE_FLAT_FACE(0),
+        LATHE_TAPER(0),
         ;
 
         private final int numProbes;
@@ -660,6 +663,11 @@ public class ProbeService implements UGSEventListener {
         performCutCylinderShellInternal(0);
     }
 
+    /**
+     * 1,1,1,.312,(0)*
+     * @param stepNumber
+     * @throws IllegalStateException 
+     */
     private void performCutCylinderShellInternal(int stepNumber) throws IllegalStateException {
         String u = GcodeUtils.unitCommand(params.units);
 
@@ -800,6 +808,245 @@ public class ProbeService implements UGSEventListener {
             logger.log(Level.SEVERE, "Exception during move operation.", e);
         }
     }
+    
+    void performLatheRoundFace(ProbeParameters params) throws IllegalStateException {
+        validateState();
+        currentOperation = ProbeOperation.LATHE_ROUND_FACE;
+        this.params = params;
+        performLatheRoundFaceInternal(0);
+    }
+    
+    /**
+     * X+ DOC, Z- Zsize, until Xsize
+     * 1,1,1,.312,(0)*
+     * @param stepNumber
+     * @throws IllegalStateException 
+     */
+    private void performLatheRoundFaceInternal(int stepNumber) throws IllegalStateException {
+        String u = GcodeUtils.unitCommand(params.units);
+
+        String ABS = "G90 " + u;
+        String REL = "G91 " + u;
+        String FAST = "G0"; //CHECK This seems to ignore feed entirely - does that get set somewhere at some point, or is it wholly independent of our config?
+        String SLOW = "G1";
+        
+        continuation = () -> performLatheRoundFaceInternal(stepNumber + 1);
+        try {
+            switch (stepNumber) {
+                case 0: {
+                    // Reset (_, _, 0) to make it easier to retract.
+                    updateWCS(params.wcsToUpdate, 0.0, 0.0, 0.0);
+
+                    //RAINY This "have one params class for everything" is feeling more and more incorrect
+                    //THINK Should offset be factored in, or no?
+
+                    //THINK The extra negatives are a bit weird
+                    //CHECK How much gcode can we send at once?  Can/should we break it up?
+                    double x = 0;
+                    double dir = Math.abs(params.xSpacing);
+                    int finalPasses = 0;
+                    
+                    while (true) {
+                        //THINK Make sure all stuff handles internal ops
+                        if (dir*x >= dir*params.xSpacing) {
+                            break;
+                        }
+                        double target;
+                        if (dir*(params.xSpacing - x) < params.cutLayerThicknessZ) {
+                            target = params.xSpacing;
+                        } else {
+                            target = x + dir*params.cutLayerThicknessZ;
+                        }
+                        gcode(ABS, SLOW, "X"+f(target), "F"+params.cutFeedRate);
+                        gcode(ABS, SLOW, "Z"+f(params.zSpacing), "F"+params.cutFeedRate);
+                        gcode(REL, FAST, "X"+f(-dir*params.retractAmount));
+                        gcode(ABS, FAST, "Z0");
+                        x = target;
+                    }
+                    // We MAY want a final flat cut at bottom depth.  For lathe work, I'm not sure.
+                    for (int i = 0; i < finalPasses; i++) {
+                        gcode(ABS, SLOW, "X"+f(x), "F"+params.cutFeedRate);
+                        gcode(ABS, SLOW, "Z"+f(params.zSpacing), "F"+params.cutFeedRate);
+                        gcode(REL, FAST, "X"+f(-dir*params.retractAmount));
+                        gcode(ABS, FAST, "Z0");
+                    }
+                    
+                    // Return
+                    gcode(ABS, FAST, "X0 Z0"); //THINK Pull out at a 45* angle?
+                    break;
+                }
+                case 1: {
+                    // Done?
+                    break;
+                }
+                default:
+                    throw new UnsupportedOperationException("Invalid step number: " + stepNumber);
+            }
+        } catch (Exception e) {
+            resetProbe();
+            logger.log(Level.SEVERE, "Exception during lathe round face operation.", e);
+        }
+    }
+
+    void performLatheFlatFace(ProbeParameters params) throws IllegalStateException {
+        validateState();
+        currentOperation = ProbeOperation.LATHE_FLAT_FACE;
+        this.params = params;
+        performLatheFlatFaceInternal(0);
+    }
+    
+    /**
+     * Z- DOC, X+ Xsize, until Zsize
+     * 1,1,1,.312,(0)*
+     * @param stepNumber
+     * @throws IllegalStateException 
+     */
+    private void performLatheFlatFaceInternal(int stepNumber) throws IllegalStateException {
+        String u = GcodeUtils.unitCommand(params.units);
+
+        String ABS = "G90 " + u;
+        String REL = "G91 " + u;
+        String FAST = "G0"; //CHECK This seems to ignore feed entirely - does that get set somewhere at some point, or is it wholly independent of our config?
+        String SLOW = "G1";
+        
+        continuation = () -> performLatheFlatFaceInternal(stepNumber + 1);
+        try {
+            switch (stepNumber) {
+                case 0: {
+                    // Reset (_, _, 0) to make it easier to retract.
+                    updateWCS(params.wcsToUpdate, 0.0, 0.0, 0.0);
+
+                    //RAINY This "have one params class for everything" is feeling more and more incorrect
+                    //THINK Should offset be factored in, or no?
+
+                    //THINK The extra negatives are a bit weird
+                    //CHECK How much gcode can we send at once?  Can/should we break it up?
+                    double z = 0;
+                    double dir = Math.abs(params.zSpacing);
+                    int finalPasses = 0;
+                    
+                    while (true) {
+                        //THINK Make sure all stuff handles internal ops
+                        if (dir*z >= dir*params.zSpacing) {
+                            break;
+                        }
+                        double target;
+                        if (dir*(params.zSpacing - z) < params.cutLayerThicknessZ) {
+                            target = params.zSpacing;
+                        } else {
+                            target = z + dir*params.cutLayerThicknessZ;
+                        }
+                        gcode(ABS, SLOW, "Z"+f(target), "F"+params.cutFeedRate);
+                        gcode(ABS, SLOW, "X"+f(params.xSpacing), "F"+params.cutFeedRate);
+                        gcode(REL, FAST, "Z"+f(-dir*params.retractAmount));
+                        gcode(ABS, FAST, "X0");
+                        z = target;
+                    }
+                    // We MAY want a final flat cut at bottom depth.  For lathe work, I'm not sure.
+                    for (int i = 0; i < finalPasses; i++) {
+                        gcode(ABS, SLOW, "Z"+f(z), "F"+params.cutFeedRate);
+                        gcode(ABS, SLOW, "X"+f(params.xSpacing), "F"+params.cutFeedRate);
+                        gcode(REL, FAST, "Z"+f(-dir*params.retractAmount));
+                        gcode(ABS, FAST, "X0");
+                    }
+                    
+                    // Return
+                    gcode(ABS, FAST, "X0 Z0"); //THINK Pull out at a 45* angle?
+                    break;
+                }
+                case 1: {
+                    // Done?
+                    break;
+                }
+                default:
+                    throw new UnsupportedOperationException("Invalid step number: " + stepNumber);
+            }
+        } catch (Exception e) {
+            resetProbe();
+            logger.log(Level.SEVERE, "Exception during lathe round face operation.", e);
+        }
+    }
+
+    void performLatheTaper(ProbeParameters params) throws IllegalStateException {
+        validateState();
+        currentOperation = ProbeOperation.LATHE_TAPER;
+        this.params = params;
+        performLatheTaperInternal(0);
+    }
+    
+    /**
+     * X+ DOC, Z- Zsize, until Xsize
+     * 1,1,1,.312,(0)*
+     * @param stepNumber
+     * @throws IllegalStateException 
+     */
+    private void performLatheTaperInternal(int stepNumber) throws IllegalStateException {
+        String u = GcodeUtils.unitCommand(params.units);
+
+        String ABS = "G90 " + u;
+        String REL = "G91 " + u;
+        String FAST = "G0"; //CHECK This seems to ignore feed entirely - does that get set somewhere at some point, or is it wholly independent of our config?
+        String SLOW = "G1";
+        
+        continuation = () -> performLatheTaperInternal(stepNumber + 1);
+        try {
+            switch (stepNumber) {
+                case 0: {
+                    asdf;
+                    // Reset (_, _, 0) to make it easier to retract.
+                    updateWCS(params.wcsToUpdate, 0.0, 0.0, 0.0);
+
+                    //RAINY This "have one params class for everything" is feeling more and more incorrect
+                    //THINK Should offset be factored in, or no?
+
+                    //THINK The extra negatives are a bit weird
+                    //CHECK How much gcode can we send at once?  Can/should we break it up?
+                    double x = 0;
+                    double dir = Math.abs(params.xSpacing);
+                    int finalPasses = 0;
+                    
+                    while (true) {
+                        //THINK Make sure all stuff handles internal ops
+                        if (dir*x >= dir*params.xSpacing) {
+                            break;
+                        }
+                        double target;
+                        if (dir*(params.xSpacing - x) < params.cutLayerThicknessZ) {
+                            target = params.xSpacing;
+                        } else {
+                            target = x + dir*params.cutLayerThicknessZ;
+                        }
+                        gcode(ABS, SLOW, "X"+f(target), "F"+params.cutFeedRate);
+                        gcode(ABS, SLOW, "Z"+f(params.zSpacing), "F"+params.cutFeedRate);
+                        gcode(REL, FAST, "X"+f(-dir*params.retractAmount));
+                        gcode(ABS, FAST, "Z0");
+                        x = target;
+                    }
+                    // We MAY want a final flat cut at bottom depth.  For lathe work, I'm not sure.
+                    for (int i = 0; i < finalPasses; i++) {
+                        gcode(ABS, SLOW, "X"+f(x), "F"+params.cutFeedRate);
+                        gcode(ABS, SLOW, "Z"+f(params.zSpacing), "F"+params.cutFeedRate);
+                        gcode(REL, FAST, "X"+f(-dir*params.retractAmount));
+                        gcode(ABS, FAST, "Z0");
+                    }
+                    
+                    // Return
+                    gcode(ABS, FAST, "X0 Z0"); //THINK Pull out at a 45* angle?
+                    break;
+                }
+                case 1: {
+                    // Done?
+                    break;
+                }
+                default:
+                    throw new UnsupportedOperationException("Invalid step number: " + stepNumber);
+            }
+        } catch (Exception e) {
+            resetProbe();
+            logger.log(Level.SEVERE, "Exception during lathe round face operation.", e);
+        }
+    }
+    
     
     
     
