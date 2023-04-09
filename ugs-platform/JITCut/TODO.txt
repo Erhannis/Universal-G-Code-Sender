@@ -44,8 +44,10 @@ lathe
   round facing
   flat facing
   taper
+    hmm - permit define offset to surface or something?
   chamfer
     a form of taper?
+  round corner
   
 
 goto x zero, y zero, z zero

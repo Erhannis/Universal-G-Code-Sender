@@ -843,7 +843,7 @@ public class ProbeService implements UGSEventListener {
                     //THINK The extra negatives are a bit weird
                     //CHECK How much gcode can we send at once?  Can/should we break it up?
                     double x = 0;
-                    double dir = Math.abs(params.xSpacing);
+                    double dir = Math.signum(params.xSpacing);
                     int finalPasses = 0;
                     
                     while (true) {
@@ -922,7 +922,7 @@ public class ProbeService implements UGSEventListener {
                     //THINK The extra negatives are a bit weird
                     //CHECK How much gcode can we send at once?  Can/should we break it up?
                     double z = 0;
-                    double dir = Math.abs(params.zSpacing);
+                    double dir = Math.signum(params.zSpacing);
                     int finalPasses = 0;
                     
                     while (true) {
@@ -992,8 +992,9 @@ public class ProbeService implements UGSEventListener {
         try {
             switch (stepNumber) {
                 case 0: {
-                    asdf;
-                    // Reset (_, _, 0) to make it easier to retract.
+                    if (1==1) {
+                        throw new RuntimeException("Not yet implemented!");
+                    }
                     updateWCS(params.wcsToUpdate, 0.0, 0.0, 0.0);
 
                     //RAINY This "have one params class for everything" is feeling more and more incorrect
@@ -1002,7 +1003,7 @@ public class ProbeService implements UGSEventListener {
                     //THINK The extra negatives are a bit weird
                     //CHECK How much gcode can we send at once?  Can/should we break it up?
                     double x = 0;
-                    double dir = Math.abs(params.xSpacing);
+                    double dir = Math.signum(params.xSpacing);
                     int finalPasses = 0;
                     
                     while (true) {
