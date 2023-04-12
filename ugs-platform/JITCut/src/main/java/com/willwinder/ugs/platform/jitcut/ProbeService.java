@@ -40,6 +40,8 @@ import java.util.function.Function;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
+// xpaste | grep -o -P "(?<=command: ).*" > /tmp/asdf.gcode
+
 /**
  * Methods that run various probe routines.
  *
@@ -48,6 +50,7 @@ import java.util.logging.Logger;
 public class ProbeService implements UGSEventListener {
     private static final Logger logger = Logger.getLogger(ProbeService.class.getName());
     private static final String WCS_PATTERN = "G10 L20 P%d %s";
+    private static final double EPS = 0.000001; // Anything smaller than this may be assumed float error
 
     private final BackendAPI backend;
     private final List<Position> probePositions = new ArrayList<>();
@@ -702,7 +705,7 @@ public class ProbeService implements UGSEventListener {
                     
                     if (helix) {
                         while (true) {
-                            if (z <= -params.cutDepthZ) {
+                            if (z + params.cutDepthZ <= EPS) { // If near or beyond zero distance left
                                 break;
                             }
                             double target;
@@ -733,7 +736,7 @@ public class ProbeService implements UGSEventListener {
                                 gcode(REL, SLOW, "Z"+f(-params.cutLayerThicknessZ), "F"+f(params.cutFeedRate));
                                 z -= params.cutLayerThicknessZ;
                             }
-                            if (z <= -params.cutDepthZ) {
+                            if (z + params.cutDepthZ <= EPS) { // If near or beyond zero distance left
                                 break;
                             }
                             for (int i = 0; i < finalPasses; i++) {
@@ -848,7 +851,7 @@ public class ProbeService implements UGSEventListener {
                     
                     while (true) {
                         //THINK Make sure all stuff handles internal ops
-                        if (dir*x >= dir*params.xSpacing) {
+                        if (dir*x - dir*params.xSpacing >= -EPS) { // If near or beyond zero distance left
                             break;
                         }
                         double target;
@@ -857,6 +860,7 @@ public class ProbeService implements UGSEventListener {
                         } else {
                             target = x + dir*params.cutLayerThicknessZ;
                         }
+                        System.out.println("X: "+target);
                         gcode(ABS, SLOW, "X"+f(target), "F"+params.cutFeedRate);
                         gcode(ABS, SLOW, "Z"+f(params.zSpacing), "F"+params.cutFeedRate);
                         gcode(REL, FAST, "X"+f(-dir*params.retractAmount));
@@ -927,7 +931,7 @@ public class ProbeService implements UGSEventListener {
                     
                     while (true) {
                         //THINK Make sure all stuff handles internal ops
-                        if (dir*z >= dir*params.zSpacing) {
+                        if (dir*z - dir*params.zSpacing >= -EPS) { // If near or beyond zero distance left
                             break;
                         }
                         double target;
@@ -1008,7 +1012,7 @@ public class ProbeService implements UGSEventListener {
                     
                     while (true) {
                         //THINK Make sure all stuff handles internal ops
-                        if (dir*x >= dir*params.xSpacing) {
+                        if (dir*x - dir*params.xSpacing >= -EPS) { // If near or beyond zero distance left
                             break;
                         }
                         double target;

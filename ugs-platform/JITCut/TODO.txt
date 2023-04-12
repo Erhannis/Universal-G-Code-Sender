@@ -10,6 +10,9 @@ visualization
   center
     inside, outside
   pitch
+  trace running machine
+  show sent gcode
+  fix the rotation
 
 Probe intermittently goes in the wrong direction.  Seems consistent in a given program run?
 
