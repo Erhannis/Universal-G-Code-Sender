@@ -44,13 +44,17 @@ probe
 
 lathe
   probe find center against flat surface jig thing?
-  round facing
-  flat facing
-  taper
+  *round facing
+  *flat facing
+  *taper
     hmm - permit define offset to surface or something?
+    permit max Z
   chamfer
     a form of taper?
   round corner
+  generally retract away from all faces
+  notch
+    trapezoidal
   
 
 goto x zero, y zero, z zero

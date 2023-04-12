@@ -55,8 +55,12 @@ import org.openide.windows.TopComponent;
 import java.awt.*;
 
 import javax.swing.*;
+import javax.swing.text.BadLocationException;
+import javax.swing.text.Document;
+import javax.swing.text.PlainDocument;
 import org.apache.commons.lang3.StringUtils;
 import org.openide.modules.OnStart;
+import org.openide.util.Exceptions;
 import org.openide.windows.WindowManager;
 
 /**
@@ -190,17 +194,20 @@ public final class ProbeTopComponent extends TopComponent implements UGSEventLis
     //THINK Choose approach direction for taper?  Or maybe that's part of the "use X" thing?
     // I think this does a round face at an angle...but only a triangular section.  It's truncated on Z+ and X-.
     //THINK What about inner tapers?
-    private final JButton latheTaperButton = new JButton("Taper (use Z)"); //RAINY Localization
+    private final JButton latheTaperButton = new JButton("Taper (use X)"); //RAINY Localization
     
     // settings
+    private static final String SETTINGS_TAB = "Settings";
     private JComboBox<WorkCoordinateSystem> settingsWorkCoordinate;
     private JComboBox<String> settingsUnits;
     private SpinnerNumberModel settingsProbeDiameter;
     private SpinnerNumberModel settingsFastFindRate;
     private SpinnerNumberModel settingsSlowMeasureRate;
     private SpinnerNumberModel settingsRetractAmount;
-
-    private static final String SETTINGS_TAB = "Settings";
+    
+    // gcode log
+    private static final String GCODE_LOG_TAB = "GCode log";
+    private Document gcodeLogModel;
 
     private final JTabbedPane jtp = new JTabbedPane(JTabbedPane.LEFT);
 
@@ -276,6 +283,14 @@ public final class ProbeTopComponent extends TopComponent implements UGSEventLis
         private int selectedTabIdx;
     }
 
+    private void clearBeforeAction() {
+        try {
+            gcodeLogModel.remove(0, gcodeLogModel.getLength());
+        } catch (BadLocationException ex) {
+            Exceptions.printStackTrace(ex);
+        }
+    }
+    
     public ProbeTopComponent() {
         setName(ProbeTitle);
         setToolTipText(ProbeTooltip);
@@ -283,7 +298,13 @@ public final class ProbeTopComponent extends TopComponent implements UGSEventLis
         backend = CentralLookup.getDefault().lookup(BackendAPI.class);
         backend.addUGSEventListener(this);
 
-        ps2 = new ProbeService(backend);
+        ps2 = new ProbeService(backend, (gcode) -> {
+            try {
+                gcodeLogModel.insertString(gcodeLogModel.getLength(), gcode+"\n", null);
+            } catch (BadLocationException ex) {
+                Exceptions.printStackTrace(ex);
+            }
+        });
 
         double largeSpinner = 1000000;
 
@@ -360,7 +381,11 @@ public final class ProbeTopComponent extends TopComponent implements UGSEventLis
         settingsSlowMeasureRate = new SpinnerNumberModel(100., 1, largeSpinner, 1.);
         settingsRetractAmount = new SpinnerNumberModel(1, 0.1, largeSpinner, 0.1);
 
+        // GCODE LOG TAB
+        gcodeLogModel = new PlainDocument();
+
         measureXYZ.addActionListener(e -> {
+                clearBeforeAction();
                 ProbeParameters pc = new ProbeParameters(
                         getDouble(settingsProbeDiameter), backend.getMachinePosition(),
                         getDouble(xyzXDistanceModel), getDouble(xyzYDistanceModel), getDouble(xyzZDistanceModel),
@@ -377,6 +402,7 @@ public final class ProbeTopComponent extends TopComponent implements UGSEventLis
             });
 
         measureOutside.addActionListener(e -> {
+                clearBeforeAction();
                 ProbeParameters pc = new ProbeParameters(
                         getDouble(settingsProbeDiameter), backend.getMachinePosition(),
                         getDouble(outsideXDistanceModel), getDouble(outsideYDistanceModel), 0.,
@@ -394,6 +420,7 @@ public final class ProbeTopComponent extends TopComponent implements UGSEventLis
 
         /*
         measureInside.addActionListener((e) -> {
+            clearBeforeAction();
             ProbeContext pc = new ProbeContext(
                 1, backend.getMachinePosition(),
                 get(insideXDistanceModel), get(insideYDistanceModel), 100., 1);
@@ -402,6 +429,7 @@ public final class ProbeTopComponent extends TopComponent implements UGSEventLis
         */
 
         zProbeButton.addActionListener(e -> {
+                clearBeforeAction();
                 ProbeParameters pc = new ProbeParameters(
                         getDouble(settingsProbeDiameter), backend.getMachinePosition(),
                         0., 0., getDouble(zProbeDistance),
@@ -418,6 +446,7 @@ public final class ProbeTopComponent extends TopComponent implements UGSEventLis
             });
 
         measureOutsideCenter.addActionListener(e -> {
+                clearBeforeAction();
                 ProbeParameters pc = new ProbeParameters(
                         getDouble(settingsProbeDiameter), backend.getMachinePosition(),
                         0., 0., getDouble(mocZDistanceModel),
@@ -435,6 +464,7 @@ public final class ProbeTopComponent extends TopComponent implements UGSEventLis
             });
 
         measureAngle.addActionListener(e -> {
+                clearBeforeAction();
                 ProbeParameters pc = new ProbeParameters(
                         getDouble(settingsProbeDiameter), backend.getMachinePosition(),
                         0., 0., 0.,
@@ -456,6 +486,7 @@ public final class ProbeTopComponent extends TopComponent implements UGSEventLis
             });
         
         cutCylinderFromInsideShellButton.addActionListener(e -> {
+                clearBeforeAction();
                 ProbeParameters pc = new ProbeParameters(
                         getDouble(settingsProbeDiameter), backend.getMachinePosition(),
                         0., 0., getDouble(mocZDistanceModel),
@@ -473,6 +504,7 @@ public final class ProbeTopComponent extends TopComponent implements UGSEventLis
             });
 
         cutCylinderOnDiameterShellButton.addActionListener(e -> {
+                clearBeforeAction();
                 ProbeParameters pc = new ProbeParameters(
                         getDouble(settingsProbeDiameter), backend.getMachinePosition(),
                         0., 0., getDouble(mocZDistanceModel),
@@ -490,6 +522,7 @@ public final class ProbeTopComponent extends TopComponent implements UGSEventLis
             });
         
         cutCylinderFromOutsideShellButton.addActionListener(e -> {
+                clearBeforeAction();
                 ProbeParameters pc = new ProbeParameters(
                         getDouble(settingsProbeDiameter), backend.getMachinePosition(),
                         0., 0., getDouble(mocZDistanceModel),
@@ -510,6 +543,7 @@ public final class ProbeTopComponent extends TopComponent implements UGSEventLis
             // Everything just uses performMoveXPlus with different angles
             
             moveXMinusButton.addActionListener(e -> {
+                    clearBeforeAction();
                     ProbeParameters pc = new ProbeParameters(
                             getDouble(settingsProbeDiameter), backend.getMachinePosition(),
                             -getDouble(moveDistanceModel), 0., 0.,
@@ -526,6 +560,7 @@ public final class ProbeTopComponent extends TopComponent implements UGSEventLis
                     ps2.performMoveXPlus(pc);
                 });
             moveXPlusButton.addActionListener(e -> {
+                    clearBeforeAction();
                     ProbeParameters pc = new ProbeParameters(
                             getDouble(settingsProbeDiameter), backend.getMachinePosition(),
                             getDouble(moveDistanceModel), 0., 0.,
@@ -542,6 +577,7 @@ public final class ProbeTopComponent extends TopComponent implements UGSEventLis
                     ps2.performMoveXPlus(pc);
                 });
             moveYMinusButton.addActionListener(e -> {
+                    clearBeforeAction();
                     ProbeParameters pc = new ProbeParameters(
                             getDouble(settingsProbeDiameter), backend.getMachinePosition(),
                             -getDouble(moveDistanceModel), 0., 0.,
@@ -558,6 +594,7 @@ public final class ProbeTopComponent extends TopComponent implements UGSEventLis
                     ps2.performMoveXPlus(pc);
                 });
             moveYPlusButton.addActionListener(e -> {
+                    clearBeforeAction();
                     ProbeParameters pc = new ProbeParameters(
                             getDouble(settingsProbeDiameter), backend.getMachinePosition(),
                             getDouble(moveDistanceModel), 0., 0.,
@@ -577,6 +614,7 @@ public final class ProbeTopComponent extends TopComponent implements UGSEventLis
         
         { // Lathe
             latheRoundFaceButton.addActionListener(e -> {
+                    clearBeforeAction();
                     ProbeParameters pc = new ProbeParameters(
                             getDouble(settingsProbeDiameter), backend.getMachinePosition(),
                             getDouble(latheXSizeModel), 0., getDouble(latheZSizeModel),
@@ -594,6 +632,7 @@ public final class ProbeTopComponent extends TopComponent implements UGSEventLis
                 });
 
             latheFlatFaceButton.addActionListener(e -> {
+                    clearBeforeAction();
                     ProbeParameters pc = new ProbeParameters(
                             getDouble(settingsProbeDiameter), backend.getMachinePosition(),
                             getDouble(latheXSizeModel), 0., getDouble(latheZSizeModel),
@@ -611,6 +650,7 @@ public final class ProbeTopComponent extends TopComponent implements UGSEventLis
                 });
 
             latheTaperButton.addActionListener(e -> {
+                    clearBeforeAction();
                     ProbeParameters pc = new ProbeParameters(
                             getDouble(settingsProbeDiameter), backend.getMachinePosition(),
                             getDouble(latheXSizeModel), 0., getDouble(latheZSizeModel),
@@ -717,6 +757,7 @@ public final class ProbeTopComponent extends TopComponent implements UGSEventLis
                 break;
             case OUTSIDE_CENTER_TAB:
                 //DUMMY
+                active = null;
 //                active = cornerRenderable;
 //                cornerRenderable.updateSpacing(
 //                        getDouble(outsideXDistanceModel),
@@ -728,6 +769,7 @@ public final class ProbeTopComponent extends TopComponent implements UGSEventLis
                 break;
             case ANGLE_TAB:
                 //DUMMY
+                active = null;
 //                active = cornerRenderable;
 //                cornerRenderable.updateSpacing(
 //                        getDouble(outsideXDistanceModel),
@@ -739,6 +781,7 @@ public final class ProbeTopComponent extends TopComponent implements UGSEventLis
                 break;
             case CUTS_TAB:
                 //DUMMY
+                active = null;
 //                active = cornerRenderable;
 //                cornerRenderable.updateSpacing(
 //                        getDouble(outsideXDistanceModel),
@@ -750,6 +793,7 @@ public final class ProbeTopComponent extends TopComponent implements UGSEventLis
                 break;
             case MOVE_TAB:
                 //DUMMY
+                active = null;
 //                active = cornerRenderable;
 //                cornerRenderable.updateSpacing(
 //                        getDouble(outsideXDistanceModel),
@@ -761,6 +805,7 @@ public final class ProbeTopComponent extends TopComponent implements UGSEventLis
                 break;
             case LATHE_TAB:
                 //DUMMY
+                active = null;
 //                active = cornerRenderable;
 //                cornerRenderable.updateSpacing(
 //                        getDouble(outsideXDistanceModel),
@@ -771,6 +816,9 @@ public final class ProbeTopComponent extends TopComponent implements UGSEventLis
 //                        0);
                 break;
             case SETTINGS_TAB:
+                active = null;
+                break;
+            case GCODE_LOG_TAB:
                 active = null;
                 break;
         }
@@ -1001,6 +1049,10 @@ public final class ProbeTopComponent extends TopComponent implements UGSEventLis
 
         settings.add(new JLabel(Localization.getString("probe.retract-amount") + ":"), "al right");
         settings.add(new JSpinner(settingsRetractAmount), "growx");
+        
+        // GCODE LOG TAB
+        JPanel gcodeLog = new JPanel(new MigLayout("wrap 1"));
+        gcodeLog.add(new JTextArea(gcodeLogModel), "growx, growy");
 
         jtp.add(XYZ_TAB, xyz);
         jtp.add(OUTSIDE_TAB, outside);
@@ -1012,6 +1064,7 @@ public final class ProbeTopComponent extends TopComponent implements UGSEventLis
         jtp.add(MOVE_TAB, move);
         jtp.add(LATHE_TAB, lathe);
         jtp.add(SETTINGS_TAB, settings);
+        jtp.add(GCODE_LOG_TAB, gcodeLog);
 
         this.setLayout(new BorderLayout());
         this.add(jtp);
@@ -1100,6 +1153,8 @@ public final class ProbeTopComponent extends TopComponent implements UGSEventLis
         ps.settingsSlowMeasureRate = getDouble(settingsSlowMeasureRate);
         ps.settingsRetractAmount = getDouble(settingsRetractAmount);
 
+        // Not saving the gcode log
+        
         ps.selectedTabIdx = this.jtp.getSelectedIndex();
 
         p.setProperty("json_data", new Gson().toJson(ps));
@@ -1170,6 +1225,8 @@ public final class ProbeTopComponent extends TopComponent implements UGSEventLis
         settingsSlowMeasureRate.setValue(ps.settingsSlowMeasureRate);
         settingsRetractAmount.setValue(ps.settingsRetractAmount);
 
+        // Not saving the gcode log
+        
         jtp.setSelectedIndex(ps.selectedTabIdx);
     }
 }

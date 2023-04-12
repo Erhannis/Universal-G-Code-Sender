@@ -53,6 +53,7 @@ public class ProbeService implements UGSEventListener {
     private static final double EPS = 0.000001; // Anything smaller than this may be assumed float error
 
     private final BackendAPI backend;
+    private final Consumer<String> gcodeCallback; //SHAME Kinda bleh; probably oughtta be a tap in backend
     private final List<Position> probePositions = new ArrayList<>();
     private ProbeOperation currentOperation = ProbeOperation.NONE;
     private ProbeParameters params = null;
@@ -139,7 +140,7 @@ public class ProbeService implements UGSEventListener {
                 double cutDiameter, double cutLayerThicknessZ, double cutDepthZ, double cutFeedRate, boolean cutCCW,
                 double feedRate, double feedRateSlow, double retractAmount,
                 Units u, WorkCoordinateSystem wcs,
-                Consumer callback) {
+                Consumer<Object> callback) {
             this.endPosition = null;
             this.probeDiameter = diameter;
             this.startPosition = start;
@@ -169,9 +170,14 @@ public class ProbeService implements UGSEventListener {
         }
     }
 
-    public ProbeService(BackendAPI backend) {
+    public ProbeService(BackendAPI backend, Consumer<String> gcodeCallback) {
         this.backend = backend;
         this.backend.addUGSEventListener(this);
+        if (gcodeCallback == null) {
+            gcodeCallback = (t) -> {
+            };
+        }
+        this.gcodeCallback = gcodeCallback;
     }
 
     protected static double retractDistance(double spacing, double retractAmount) {
@@ -979,7 +985,7 @@ public class ProbeService implements UGSEventListener {
     }
     
     /**
-     * X+ DOC, Z- Zsize, until Xsize
+     * Xdir for DOC at TAngle, Zdir and -Xdir at Angle until X0, retract X, to Z0 and Xtarget-retract, repeat until DOC correct
      * 1,1,1,.312,(0)*
      * @param stepNumber
      * @throws IllegalStateException 
@@ -996,9 +1002,7 @@ public class ProbeService implements UGSEventListener {
         try {
             switch (stepNumber) {
                 case 0: {
-                    if (1==1) {
-                        throw new RuntimeException("Not yet implemented!");
-                    }
+                    //CHECK Angle negative, what mean, should use?
                     updateWCS(params.wcsToUpdate, 0.0, 0.0, 0.0);
 
                     //RAINY This "have one params class for everything" is feeling more and more incorrect
@@ -1007,32 +1011,42 @@ public class ProbeService implements UGSEventListener {
                     //THINK The extra negatives are a bit weird
                     //CHECK How much gcode can we send at once?  Can/should we break it up?
                     double x = 0;
-                    double dir = Math.signum(params.xSpacing);
+                    double xdir = Math.signum(params.xSpacing);
                     int finalPasses = 0;
+                    double a = params.angle*2*Math.PI/360.0;
+                    double xcut = params.cutLayerThicknessZ / Math.cos(a);
+                    
+                    /*
+                    Xdir for DOC at TAngle
+                    Zdir and -Xdir at Angle until X0 //RAINY permit max Z setting
+                    retract X
+                    to Z0 and Xtarget-retract
+                    repeat until DOC correct
+                    */
                     
                     while (true) {
                         //THINK Make sure all stuff handles internal ops
-                        if (dir*x - dir*params.xSpacing >= -EPS) { // If near or beyond zero distance left
+                        if (xdir*x - xdir*params.xSpacing >= -EPS) { // If near or beyond zero distance left
                             break;
                         }
                         double target;
-                        if (dir*(params.xSpacing - x) < params.cutLayerThicknessZ) {
+                        if (xdir*(params.xSpacing - x) < xcut) {
                             target = params.xSpacing;
                         } else {
-                            target = x + dir*params.cutLayerThicknessZ;
+                            target = x + xdir*xcut;
                         }
                         gcode(ABS, SLOW, "X"+f(target), "F"+params.cutFeedRate);
-                        gcode(ABS, SLOW, "Z"+f(params.zSpacing), "F"+params.cutFeedRate);
-                        gcode(REL, FAST, "X"+f(-dir*params.retractAmount));
-                        gcode(ABS, FAST, "Z0");
+                        gcode(ABS, SLOW, "X0", "Z"+f(-target/Math.tan(a)), "F"+params.feedRate);
+                        gcode(REL, FAST, "X"+f(-xdir*params.retractAmount));
+                        gcode(ABS, FAST, "X"+f(target-xdir*params.retractAmount), "Z0");
                         x = target;
                     }
                     // We MAY want a final flat cut at bottom depth.  For lathe work, I'm not sure.
                     for (int i = 0; i < finalPasses; i++) {
                         gcode(ABS, SLOW, "X"+f(x), "F"+params.cutFeedRate);
-                        gcode(ABS, SLOW, "Z"+f(params.zSpacing), "F"+params.cutFeedRate);
-                        gcode(REL, FAST, "X"+f(-dir*params.retractAmount));
-                        gcode(ABS, FAST, "Z0");
+                        gcode(ABS, SLOW, "X0", "Z"+f(-x/Math.tan(a)), "F"+params.feedRate);
+                        gcode(REL, FAST, "X"+f(-xdir*params.retractAmount));
+                        gcode(ABS, FAST, "X"+f(x-xdir*params.retractAmount), "Z0");
                     }
                     
                     // Return
@@ -1134,6 +1148,7 @@ public class ProbeService implements UGSEventListener {
         for (int i = 1; i < s.length; i++) {
             sb.append(" " + s[i]);
         }
+        gcodeCallback.accept(sb.toString());
         backend.sendGcodeCommand(true, sb.toString());
     }
 
@@ -1141,14 +1156,17 @@ public class ProbeService implements UGSEventListener {
      * Send a probe command and handle any possible error.
      */
     private void probe(char axis, double rate, double distance, Units u) throws Exception {
+        gcodeCallback.accept("; probe not captured");
         backend.probe(String.valueOf(axis), rate, distance, u);
     }
 
     private void probe(String target, double rate, Units u) throws Exception {
+        gcodeCallback.accept("; probe not captured");
         backend.probe(target, rate, u);
     }
     
     private void probe(double x, double y, double z, double rate, Units u) throws Exception {
+        gcodeCallback.accept("; probe not captured");
         backend.probe(x, y, z, rate, u);
     }
 
