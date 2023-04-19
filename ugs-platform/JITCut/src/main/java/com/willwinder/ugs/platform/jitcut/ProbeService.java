@@ -77,6 +77,7 @@ public class ProbeService implements UGSEventListener {
         //RAINY PITCH(N),
         MEASURE_ANGLE(4),
         CYLINDER_SHELL(0),
+        BOX_SOLID(0),
         MOVE_XP(0),
         LATHE_ROUND_FACE(0),
         LATHE_FLAT_FACE(0),
@@ -101,6 +102,15 @@ public class ProbeService implements UGSEventListener {
      * Parameters passed into the probe operations.
      */
     public static class ProbeParameters {
+        public static enum BoxOrder {
+            XYZ,
+            XZY,
+            YXZ,
+            YZX,
+            ZXY,
+            ZYX
+        }
+        
         public String errorMessage;
         public UGSEvent event;
         public final double probeDiameter;
@@ -121,6 +131,7 @@ public class ProbeService implements UGSEventListener {
         public final double cutDepthZ;
         public final double cutFeedRate; //THINK Separate parameter for Z/XY?
         public final boolean cutCCW;
+        public final BoxOrder cutBoxOrder;
         public final double feedRate;
         public final double feedRateSlow;
         public final double retractAmount;
@@ -137,7 +148,7 @@ public class ProbeService implements UGSEventListener {
                 double xOffset, double yOffset, double zOffset,
                 double xPush, double yPush, double zPush,
                 double angle, double angleSpacing, double angleOtherSide,
-                double cutDiameter, double cutLayerThicknessZ, double cutDepthZ, double cutFeedRate, boolean cutCCW,
+                double cutDiameter, double cutLayerThicknessZ, double cutDepthZ, double cutFeedRate, boolean cutCCW, BoxOrder cutBoxOrder,
                 double feedRate, double feedRateSlow, double retractAmount,
                 Units u, WorkCoordinateSystem wcs,
                 Consumer<Object> callback) {
@@ -161,6 +172,7 @@ public class ProbeService implements UGSEventListener {
             this.cutDepthZ = cutDepthZ;
             this.cutFeedRate = cutFeedRate;
             this.cutCCW = cutCCW;
+            this.cutBoxOrder = cutBoxOrder;
             this.feedRate = feedRate;
             this.feedRateSlow = feedRateSlow;
             this.retractAmount = retractAmount;
@@ -777,6 +789,229 @@ public class ProbeService implements UGSEventListener {
         }
     }
 
+    void performCutBoxSolid(ProbeParameters params) throws IllegalStateException {
+        validateState();
+        currentOperation = ProbeOperation.BOX_SOLID;
+        this.params = params;
+        performCutBoxSolidInternal(0);
+    }
+
+    /**
+     * //RAINY Inside vs outside?...not sure that makes as much sense with a solid box.
+     * /// Maybe cutting a box-hole into st vs cutting st into a box-shape.
+     * @param stepNumber
+     * @throws IllegalStateException 
+     */
+    private void performCutBoxSolidInternal(int stepNumber) throws IllegalStateException {
+        String u = GcodeUtils.unitCommand(params.units);
+
+        String ABS = "G90 " + u;
+        String REL = "G91 " + u;
+        String FAST = "G0"; //CHECK This seems to ignore feed entirely - does that get set somewhere at some point, or is it wholly independent of our config?
+        String SLOW = "G1";
+        String ARC = params.cutCCW ? "G3" : "G2";
+        
+        continuation = () -> performCutBoxSolidInternal(stepNumber + 1);
+        try {
+            switch (stepNumber) {
+                case 0: {
+                    // Reset (_, _, 0) to make it easier to retract.
+                    updateWCS(params.wcsToUpdate, 0.0, 0.0, 0.0);
+
+                    //RAINY This "have one params class for everything" is feeling more and more incorrect
+                    //THINK Should offset be factored in, or no?
+
+                    String AN, BN, CN; // Name
+                    double AM, BM, CM; // Max
+                    double AS, BS, CS; // Sign
+                    double AD, BD, CD; // Delta
+                    
+                    switch (params.cutBoxOrder) {
+                        case XYZ: {
+                            AN = "X";
+                            BN = "Y";
+                            CN = "Z";
+                            AM = Math.abs(params.xSpacing);
+                            BM = Math.abs(params.ySpacing);
+                            CM = Math.abs(params.zSpacing);
+                            AS = Math.signum(params.xSpacing);
+                            BS = Math.signum(params.ySpacing);
+                            CS = Math.signum(params.zSpacing);
+                            AD = params.xPush;
+                            BD = params.yPush;
+                            CD = params.zPush;
+                            break;
+                        }
+                        case XZY: {
+                            AN = "X";
+                            BN = "Z";
+                            CN = "Y";
+                            AM = Math.abs(params.xSpacing);
+                            BM = Math.abs(params.zSpacing);
+                            CM = Math.abs(params.ySpacing);
+                            AS = Math.signum(params.xSpacing);
+                            BS = Math.signum(params.zSpacing);
+                            CS = Math.signum(params.ySpacing);
+                            AD = params.xPush;
+                            BD = params.zPush;
+                            CD = params.yPush;
+                            break;
+                        }
+                        case YXZ: {
+                            AN = "Y";
+                            BN = "X";
+                            CN = "Z";
+                            AM = Math.abs(params.ySpacing);
+                            BM = Math.abs(params.xSpacing);
+                            CM = Math.abs(params.zSpacing);
+                            AS = Math.signum(params.ySpacing);
+                            BS = Math.signum(params.xSpacing);
+                            CS = Math.signum(params.zSpacing);
+                            AD = params.yPush;
+                            BD = params.xPush;
+                            CD = params.zPush;
+                            break;
+                        }
+                        case YZX: {
+                            AN = "Y";
+                            BN = "Z";
+                            CN = "X";
+                            AM = Math.abs(params.ySpacing);
+                            BM = Math.abs(params.zSpacing);
+                            CM = Math.abs(params.xSpacing);
+                            AS = Math.signum(params.ySpacing);
+                            BS = Math.signum(params.zSpacing);
+                            CS = Math.signum(params.xSpacing);
+                            AD = params.yPush;
+                            BD = params.zPush;
+                            CD = params.xPush;
+                            break;
+                        }
+                        case ZXY: {
+                            AN = "Z";
+                            BN = "X";
+                            CN = "Y";
+                            AM = Math.abs(params.zSpacing);
+                            BM = Math.abs(params.xSpacing);
+                            CM = Math.abs(params.ySpacing);
+                            AS = Math.signum(params.zSpacing);
+                            BS = Math.signum(params.xSpacing);
+                            CS = Math.signum(params.ySpacing);
+                            AD = params.zPush;
+                            BD = params.xPush;
+                            CD = params.yPush;
+                            break;
+                        }
+                        case ZYX: {
+                            AN = "Z";
+                            BN = "Y";
+                            CN = "X";
+                            AM = Math.abs(params.zSpacing);
+                            BM = Math.abs(params.ySpacing);
+                            CM = Math.abs(params.xSpacing);
+                            AS = Math.signum(params.zSpacing);
+                            BS = Math.signum(params.ySpacing);
+                            CS = Math.signum(params.xSpacing);
+                            AD = params.zPush;
+                            BD = params.yPush;
+                            CD = params.xPush;
+                            break;
+                        }
+                        default: {
+                            throw new UnsupportedOperationException("Invalid box order: " + params.cutBoxOrder);
+                        }
+                    }
+                    
+                    double a = 0;
+                    double b = 0;
+                    double c = 0;
+                    int ad = 1;
+                    int bd = 1;
+                    int cd = 1;
+                    int phase = 0;
+                    
+                    //CHECK Does it work with 0 width?
+                    phaseLoop: while (true) {
+                        double target;
+                        switch (phase) {
+                            case 0: { // A
+                                if (ad > 0) {
+                                    gcode(ABS, SLOW, AN+f(AS*AM), "F"+params.cutFeedRate);
+                                } else {
+                                    gcode(ABS, SLOW, AN+f(0.), "F"+params.cutFeedRate);
+                                }
+                                ad *= -1;
+                                phase++;
+                                break;
+                            }
+                            case 1: { // B
+                                if (bd > 0) {
+                                    target = BM;
+                                } else {
+                                    target = 0;
+                                }
+                                if (Math.abs(target-b) > EPS) {
+                                    // Not done yet
+                                    if (Math.abs(target-b)-BD <= EPS) { // Is close?
+                                        b = target;
+                                    } else {
+                                        b += bd*BD;
+                                    }
+                                    gcode(ABS, SLOW, BN+f(BS*b), "F"+params.cutFeedRate);
+                                    phase = 0;
+                                } else {
+                                    // Done
+                                    bd *= -1;
+                                    phase++;
+                                }
+                                break;
+                            }
+                            case 2: { // C
+                                if (cd > 0) {
+                                    target = CM;
+                                } else {
+                                    target = 0;
+                                }
+                                if (Math.abs(target-c) > EPS) {
+                                    // Not done yet
+                                    if (Math.abs(target-c)-CD <= EPS) { // Is close?
+                                        c = target;
+                                    } else {
+                                        c += cd*CD;
+                                    }
+                                    gcode(ABS, SLOW, CN+f(CS*c), "F"+params.cutFeedRate);
+                                    phase = 0;
+                                } else {
+                                    // Done
+                                    cd *= -1;
+                                    phase++;
+                                }
+                                break;
+                            }
+                            default: {
+                                break phaseLoop;
+                            }
+                        }
+                    }
+
+                    // Return
+                    gcode(ABS, FAST, "Z0");
+                    gcode(ABS, FAST, "X0 Y0");
+                    break;
+                }
+                case 1: {
+                    // Done, I guess?
+                    break;
+                }
+                default:
+                    throw new UnsupportedOperationException("Invalid step number: " + stepNumber);
+            }
+        } catch (Exception e) {
+            resetProbe();
+            logger.log(Level.SEVERE, "Exception during cut box solid operation.", e);
+        }
+    }
+    
     void performMoveXPlus(ProbeParameters params) throws IllegalStateException {
         validateState();
         currentOperation = ProbeOperation.MOVE_XP;

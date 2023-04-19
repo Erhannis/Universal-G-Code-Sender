@@ -37,6 +37,9 @@ external features?
     (shell, solid)
     x
     (cylinder, square, cube?)
+  done:
+    cylinder x shell
+    cube x solid
 
 probe
   x, y, z
