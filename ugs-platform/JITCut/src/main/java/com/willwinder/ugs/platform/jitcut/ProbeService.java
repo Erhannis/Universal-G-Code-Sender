@@ -707,6 +707,9 @@ public class ProbeService implements UGSEventListener {
         validateState();
         currentOperation = ProbeOperation.INSIDE_CIRCLE_CENTER;
         this.params = params;
+        System.out.println(angleToVector(params.angle+0, params.angleSpacing));
+        System.out.println(angleToVector(params.angle+60, params.angleSpacing));
+        System.out.println(angleToVector(params.angle+120, params.angleSpacing));
         performInsideCircleCenterInternal(0);
     }
     
@@ -723,14 +726,14 @@ public class ProbeService implements UGSEventListener {
         /*
         // Should find top?  Eh, let z-probe handle that //THINK ...Or SHOULD I?
         Z-
-        probe Y+
-        probe slow Y+
+        probe 0*
+        probe slow 0*
         XY0
-        probe X+
-        probe slow X+
+        probe 120*
+        probe slow 120*
         XY0
-        probe Y-
-        probe slow Y-
+        probe 240*
+        probe slow 240*
         XY0
         Z0
         */
@@ -745,45 +748,45 @@ public class ProbeService implements UGSEventListener {
                     // Z-
                     gcode(g0Abs + " Z" + params.zSpacing);
                     
-                    // Probe Y+
-                    probe('Y', params.feedRate, params.angleSpacing, params.units);
+                    // Probe 0*
+                    probe(angleToVector(params.angle+0, params.angleSpacing), params.feedRate, params.units);
                     break;
                 }
                 case 1: {
-                    // Retract Y-
-                    gcode(g0Rel + " Y" + retractDistance(params.angleSpacing, params.retractAmount));
-                    // Probe Y+ slow
-                    probe('Y', params.feedRateSlow, params.angleSpacing, params.units);
+                    // Retract 0*
+                    gcode(g0Rel + angleToVector(params.angle+0, retractDistance(params.angleSpacing, params.retractAmount)));
+                    // Probe 0* slow
+                    probe(angleToVector(params.angle+0, params.angleSpacing), params.feedRateSlow, params.units);
                     break;
                 }
                 case 2: {
                     // Return to safe spot
                     gcode(g0Abs + " X0.0 Y0.0");
                     
-                    // Probe X+
-                    probe('X', params.feedRate, params.angleSpacing, params.units);
+                    // Probe 120*
+                    probe(angleToVector(params.angle+120, params.angleSpacing), params.feedRate, params.units);
                     break;
                 }
                 case 3: {
-                    // Retract X-
-                    gcode(g0Rel + " X" + retractDistance(params.angleSpacing, params.retractAmount));
-                    // Probe X+ slow
-                    probe('X', params.feedRateSlow, params.angleSpacing, params.units);
+                    // Retract 120*
+                    gcode(g0Rel + angleToVector(params.angle+120, retractDistance(params.angleSpacing, params.retractAmount)));
+                    // Probe 120* slow
+                    probe(angleToVector(params.angle+120, params.angleSpacing), params.feedRateSlow, params.units);
                     break;
                 }
                 case 4: {
                     // Return to safe spot
                     gcode(g0Abs + " X0.0 Y0.0");
                     
-                    // Probe Y-
-                    probe('Y', params.feedRate, -params.angleSpacing, params.units);
+                    // Probe 240*
+                    probe(angleToVector(params.angle+240, params.angleSpacing), params.feedRate, params.units);
                     break;
                 }
                 case 5: {
-                    // Retract Y+
-                    gcode(g0Rel + " Y" + retractDistance(-params.angleSpacing, params.retractAmount));
-                    // Probe Y- slow
-                    probe('Y', params.feedRateSlow, -params.angleSpacing, params.units);
+                    // Retract 240*
+                    gcode(g0Rel + angleToVector(params.angle+240, retractDistance(params.angleSpacing, params.retractAmount)));
+                    // Probe 240* slow
+                    probe(angleToVector(params.angle+240, params.angleSpacing), params.feedRateSlow, params.units);
                     break;
                 }
                 case 6: {
@@ -796,18 +799,18 @@ public class ProbeService implements UGSEventListener {
                     // Once idle, perform calculations.
                     Preconditions.checkState(probePositions.size() == 6, "Unexpected number of probe positions.");
 
-                    //THINK Would it be more accurate to do three 60*?
-                    Position probeYP = probePositions.get(1).getPositionIn(params.units);
-                    Position probeXP = probePositions.get(3).getPositionIn(params.units);
-                    Position probeYM = probePositions.get(5).getPositionIn(params.units);
+                    Position probeA = probePositions.get(1).getPositionIn(params.units);
+                    Position probeB = probePositions.get(3).getPositionIn(params.units);
+                    Position probeC = probePositions.get(5).getPositionIn(params.units);
 
                     double radius = params.probeDiameter / 2;
 
                     //CHECK ...Offsets?  I don't really know what they do.
-                    Position center = findXYCircleCenter(probeYP, probeXP, probeYM);
+                    Position center = findXYCircleCenter(probeA, probeB, probeC);
+                    System.out.println("Center: " + center.x + ", " + center.y);
                     
-                    double dx = (probeYP.x-center.x);
-                    double dy = (probeYP.y-center.y);
+                    double dx = (probeA.x-center.x);
+                    double dy = (probeA.y-center.y);
                     double dist = Math.sqrt((dx*dx)+(dy*dy))+radius;
                     System.out.println("Diameter: " + dist);
                     
@@ -959,7 +962,8 @@ public class ProbeService implements UGSEventListener {
                     
                     // CW Arc
                     //THINK Apply rotations?
-                    gcode(ABS, FAST, "Y"+f(r));
+                    //gcode(ABS, FAST, "Y"+f(r));
+                    gcode(ABS, SLOW, "Y"+f(r), "F"+f(params.cutFeedRate));
 
                     //THINK The extra negatives are a bit weird
                     //CHECK How much gcode can we send at once?  Can/should we break it up?
