@@ -72,7 +72,9 @@ public class ProbeService implements UGSEventListener {
         //INSIDE_XY    (4),
         //INSIDE_CIRCLE(4),
         //RAINY ANGLE(N),
-        OUTSIDE_CENTER(4),
+        OUTSIDE_LINEAR_CENTER(4),
+        INSIDE_LINEAR_CENTER(4),
+        INSIDE_CIRCLE_CENTER(6),
         //RAINY INSIDE_CENTER(N),
         //RAINY PITCH(N),
         MEASURE_ANGLE(4),
@@ -465,11 +467,11 @@ public class ProbeService implements UGSEventListener {
         }
     }
     
-    void performOutsideCenter(ProbeParameters params) throws IllegalStateException {
+    void performOutsideLinearCenter(ProbeParameters params) throws IllegalStateException {
         validateState();
-        currentOperation = ProbeOperation.OUTSIDE_CENTER;
+        currentOperation = ProbeOperation.OUTSIDE_LINEAR_CENTER;
         this.params = params;
-        performOutsideCenterInternal(0);
+        performOutsideLinearCenterInternal(0);
     }
     
     /**
@@ -477,7 +479,7 @@ public class ProbeService implements UGSEventListener {
      * @param stepNumber
      * @throws IllegalStateException 
      */
-    private void performOutsideCenterInternal(int stepNumber) throws IllegalStateException {
+    private void performOutsideLinearCenterInternal(int stepNumber) throws IllegalStateException {
         String g = GcodeUtils.unitCommand(params.units);
 
         String g0Abs = "G90 " + g + " G0";
@@ -495,7 +497,7 @@ public class ProbeService implements UGSEventListener {
         probe slow angle-        
         */
 
-        continuation = () -> performOutsideCenterInternal(stepNumber + 1);
+        continuation = () -> performOutsideLinearCenterInternal(stepNumber + 1);
         try {
             switch (stepNumber) {
                 case 0: {
@@ -569,7 +571,7 @@ public class ProbeService implements UGSEventListener {
                     
                     Position startPositionInUnits = params.startPosition.getPositionIn(params.units);
                     updateWCS(params.wcsToUpdate,
-                            startPositionInUnits.x - xCenter,
+                            startPositionInUnits.x - xCenter, //CHECK Would the fooOffsets mess this up?
                             startPositionInUnits.y - yCenter,
                             null);
                     break;
@@ -579,10 +581,252 @@ public class ProbeService implements UGSEventListener {
             }
         } catch (Exception e) {
             resetProbe();
-            logger.log(Level.SEVERE, "Exception during XYZ probe operation.", e);
+            logger.log(Level.SEVERE, "Exception during outside linear center probe operation.", e);
         }
     }
 
+    void performInsideLinearCenter(ProbeParameters params) throws IllegalStateException {
+        validateState();
+        currentOperation = ProbeOperation.INSIDE_LINEAR_CENTER;
+        this.params = params;
+        performInsideLinearCenterInternal(0);
+    }
+    
+    /**
+     * Angle 0 = X+, goes counter-clockwise I guess??? //THINK Is that the most obvious default?
+     * @param stepNumber
+     * @throws IllegalStateException 
+     */
+    private void performInsideLinearCenterInternal(int stepNumber) throws IllegalStateException {
+        String g = GcodeUtils.unitCommand(params.units);
+
+        String g0Abs = "G90 " + g + " G0";
+        String g0Rel = "G91 " + g + " G0";
+        
+        /*
+        // Should find top?  Eh, let z-probe handle that //THINK ...Or SHOULD I?
+        Z-
+        probe angle-
+        probe slow angle-
+        Z+
+        angle+ other side
+        Z-
+        probe angle+
+        probe slow angle+
+        */
+
+        continuation = () -> performInsideLinearCenterInternal(stepNumber + 1);
+        try {
+            switch (stepNumber) {
+                case 0: {
+                    // Reset (0,0,0) to make it easier to retract.
+                    updateWCS(params.wcsToUpdate, 0.0, 0.0, 0.0);
+
+                    // Z-
+                    gcode(g0Abs + " Z" + params.zSpacing);
+                    
+                    // Probe angle-
+                    probe(angleToVector(params.angle, -params.angleSpacing), params.feedRate, params.units);
+                    break;
+                }
+                case 1: {
+                    // Retract angle+
+                    gcode(g0Rel + angleToVector(params.angle, retractDistance(-params.angleSpacing, params.retractAmount)));
+                    // Probe angle- slow
+                    probe(angleToVector(params.angle, -params.angleSpacing), params.feedRateSlow, params.units);
+                    break;
+                }
+                case 2: {
+                    // Return to safe spot
+                    gcode(g0Abs + " X0.0 Y0.0");
+                    gcode(g0Abs + " Z0.0");
+                    
+                    // Move to other side
+                    gcode(g0Abs + angleToVector(params.angle, params.angleOtherSide));
+                    
+                    // Z-
+                    gcode(g0Abs + " Z" + params.zSpacing);
+
+                    // Probe angle+
+                    probe(angleToVector(params.angle, params.angleSpacing), params.feedRate, params.units);
+                    break;
+                }
+                case 3: {
+                    // Retract angle-
+                    gcode(g0Rel + angleToVector(params.angle, retractDistance(params.angleSpacing, params.retractAmount)));
+                    // Probe angle+ slow
+                    probe(angleToVector(params.angle, params.angleSpacing), params.feedRateSlow, params.units);
+                    break;
+                }
+                case 4: {
+                    // Back up
+                    gcode(g0Abs + angleToVector(params.angle, params.angleOtherSide));
+                    gcode(g0Abs + " Z0.0");
+                    gcode(g0Abs + " X0.0 Y0.0"); //THINK Should we return to 0,0,0?  Seems a waste, but consistency...
+                    break;
+                }
+                case 5: {
+                    // Once idle, perform calculations.
+                    Preconditions.checkState(probePositions.size() == 4, "Unexpected number of probe positions.");
+
+                    Position probeA = probePositions.get(1).getPositionIn(params.units);
+                    Position probeB = probePositions.get(3).getPositionIn(params.units);
+
+                    double radius = params.probeDiameter / 2;
+                    
+                    double xPosA = probeA.x + angleToX(params.angle, -radius) + params.xOffset;
+                    double yPosA = probeA.y + angleToY(params.angle, -radius) + params.yOffset;
+                    double xPosB = probeB.x + angleToX(params.angle, radius) + params.xOffset;
+                    double yPosB = probeB.y + angleToY(params.angle, radius) + params.yOffset;
+
+                    double xCenter = (xPosA+xPosB)/2;
+                    double yCenter = (yPosA+yPosB)/2;
+                    
+                    double dx = (xPosB-xPosA);
+                    double dy = (yPosB-yPosA);
+                    double dist = Math.sqrt((dx*dx)+(dy*dy));
+                    System.out.println("Distance: " + dist);
+                    
+                    Position startPositionInUnits = params.startPosition.getPositionIn(params.units);
+                    updateWCS(params.wcsToUpdate,
+                            startPositionInUnits.x - xCenter, //CHECK Would the fooOffsets mess this up?
+                            startPositionInUnits.y - yCenter,
+                            null);
+                    break;
+                }
+                default:
+                    throw new UnsupportedOperationException("Invalid step number: " + stepNumber);
+            }
+        } catch (Exception e) {
+            resetProbe();
+            logger.log(Level.SEVERE, "Exception during inside linear center probe operation.", e);
+        }
+    }
+
+    void performInsideCircleCenter(ProbeParameters params) throws IllegalStateException {
+        validateState();
+        currentOperation = ProbeOperation.INSIDE_CIRCLE_CENTER;
+        this.params = params;
+        performInsideCircleCenterInternal(0);
+    }
+    
+    /**
+     * @param stepNumber
+     * @throws IllegalStateException 
+     */
+    private void performInsideCircleCenterInternal(int stepNumber) throws IllegalStateException {
+        String g = GcodeUtils.unitCommand(params.units);
+
+        String g0Abs = "G90 " + g + " G0";
+        String g0Rel = "G91 " + g + " G0";
+        
+        /*
+        // Should find top?  Eh, let z-probe handle that //THINK ...Or SHOULD I?
+        Z-
+        probe Y+
+        probe slow Y+
+        XY0
+        probe X+
+        probe slow X+
+        XY0
+        probe Y-
+        probe slow Y-
+        XY0
+        Z0
+        */
+
+        continuation = () -> performInsideCircleCenterInternal(stepNumber + 1);
+        try {
+            switch (stepNumber) {
+                case 0: {
+                    // Reset (0,0,0) to make it easier to retract.
+                    updateWCS(params.wcsToUpdate, 0.0, 0.0, 0.0);
+
+                    // Z-
+                    gcode(g0Abs + " Z" + params.zSpacing);
+                    
+                    // Probe Y+
+                    probe('Y', params.feedRate, params.angleSpacing, params.units);
+                    break;
+                }
+                case 1: {
+                    // Retract Y-
+                    gcode(g0Rel + " Y" + retractDistance(params.angleSpacing, params.retractAmount));
+                    // Probe Y+ slow
+                    probe('Y', params.feedRateSlow, params.angleSpacing, params.units);
+                    break;
+                }
+                case 2: {
+                    // Return to safe spot
+                    gcode(g0Abs + " X0.0 Y0.0");
+                    
+                    // Probe X+
+                    probe('X', params.feedRate, params.angleSpacing, params.units);
+                    break;
+                }
+                case 3: {
+                    // Retract X-
+                    gcode(g0Rel + " X" + retractDistance(params.angleSpacing, params.retractAmount));
+                    // Probe X+ slow
+                    probe('X', params.feedRateSlow, params.angleSpacing, params.units);
+                    break;
+                }
+                case 4: {
+                    // Return to safe spot
+                    gcode(g0Abs + " X0.0 Y0.0");
+                    
+                    // Probe Y-
+                    probe('Y', params.feedRate, -params.angleSpacing, params.units);
+                    break;
+                }
+                case 5: {
+                    // Retract Y+
+                    gcode(g0Rel + " Y" + retractDistance(-params.angleSpacing, params.retractAmount));
+                    // Probe Y- slow
+                    probe('Y', params.feedRateSlow, -params.angleSpacing, params.units);
+                    break;
+                }
+                case 6: {
+                    // Return
+                    gcode(g0Abs + " X0.0 Y0.0");
+                    gcode(g0Abs + " Z0.0");
+                    break;
+                }
+                case 7: {
+                    // Once idle, perform calculations.
+                    Preconditions.checkState(probePositions.size() == 6, "Unexpected number of probe positions.");
+
+                    //THINK Would it be more accurate to do three 60*?
+                    Position probeYP = probePositions.get(1).getPositionIn(params.units);
+                    Position probeXP = probePositions.get(3).getPositionIn(params.units);
+                    Position probeYM = probePositions.get(5).getPositionIn(params.units);
+
+                    double radius = params.probeDiameter / 2;
+
+                    //CHECK ...Offsets?  I don't really know what they do.
+                    Position center = findXYCircleCenter(probeYP, probeXP, probeYM);
+                    
+                    double dx = (probeYP.x-center.x);
+                    double dy = (probeYP.y-center.y);
+                    double dist = Math.sqrt((dx*dx)+(dy*dy))+radius;
+                    System.out.println("Diameter: " + dist);
+                    
+                    Position startPositionInUnits = params.startPosition.getPositionIn(params.units);
+                    updateWCS(params.wcsToUpdate,
+                            startPositionInUnits.x - center.x,
+                            startPositionInUnits.y - center.y,
+                            null);
+                    break;
+                }
+                default:
+                    throw new UnsupportedOperationException("Invalid step number: " + stepNumber);
+            }
+        } catch (Exception e) {
+            resetProbe();
+            logger.log(Level.SEVERE, "Exception during inside circle center probe operation.", e);
+        }
+    }
+    
     void performMeasureAngle(ProbeParameters params) throws IllegalStateException {
         validateState();
         currentOperation = ProbeOperation.MEASURE_ANGLE;

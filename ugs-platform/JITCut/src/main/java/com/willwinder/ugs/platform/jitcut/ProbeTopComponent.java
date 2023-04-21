@@ -155,8 +155,17 @@ public final class ProbeTopComponent extends TopComponent implements UGSEventLis
     private SpinnerNumberModel mocAngleModel;
     private SpinnerNumberModel mocXYDistanceModel;
     private SpinnerNumberModel mocOtherSideModel;
-    private final JButton measureOutsideCenter = new JButton("Measure outside center"); //RAINY Localization
+    private final JButton measureOutsideLinearCenter = new JButton("Measure outside linear center"); //RAINY Localization
 
+    // outside center tab
+    private static final String INSIDE_CENTER_TAB = "ICenter";
+    private SpinnerNumberModel micZDistanceModel;
+    private SpinnerNumberModel micAngleModel;
+    private SpinnerNumberModel micXYDistanceModel;
+    private SpinnerNumberModel micOtherSideModel;
+    private final JButton measureInsideLinearCenter = new JButton("Measure inside linear center"); //RAINY Localization
+    private final JButton measureInsideCircleCenter = new JButton("Measure inside circle center"); //RAINY Localization
+    
     // angle tab
     private static final String ANGLE_TAB = "Angle";
     private SpinnerNumberModel angleForwardDistanceModel;
@@ -271,6 +280,11 @@ public final class ProbeTopComponent extends TopComponent implements UGSEventLis
         private double mocXYDistance;
         private double mocOtherSide;
 
+        private double micZDistance;
+        private double micAngle;
+        private double micXYDistance;
+        private double micOtherSide;
+        
         private double angleForwardDistance;
         private double angleStrafeDistance;
         private double angleStartingAngle;
@@ -368,6 +382,12 @@ public final class ProbeTopComponent extends TopComponent implements UGSEventLis
         mocXYDistanceModel = new SpinnerNumberModel(50., -largeSpinner, largeSpinner, 0.1);
         mocOtherSideModel = new SpinnerNumberModel(100., -largeSpinner, largeSpinner, 0.1);
 
+        // INSIDE MEASURE CENTER TAB
+        micZDistanceModel = new SpinnerNumberModel(-10., -largeSpinner, largeSpinner, 0.1);
+        micAngleModel = new SpinnerNumberModel(90., -largeSpinner, largeSpinner, 0.1); //THINK Restrict to 0-360?
+        micXYDistanceModel = new SpinnerNumberModel(50., -largeSpinner, largeSpinner, 0.1);
+        micOtherSideModel = new SpinnerNumberModel(100., -largeSpinner, largeSpinner, 0.1);
+        
         // ANGLE TAB
         angleForwardDistanceModel = new SpinnerNumberModel(20., -largeSpinner, largeSpinner, 0.1);
         angleStrafeDistanceModel = new SpinnerNumberModel(30., -largeSpinner, largeSpinner, 0.1);
@@ -475,7 +495,7 @@ public final class ProbeTopComponent extends TopComponent implements UGSEventLis
                 ps2.performZProbe(pc);
             });
 
-        measureOutsideCenter.addActionListener(e -> {
+        measureOutsideLinearCenter.addActionListener(e -> {
                 clearBeforeAction();
                 ProbeParameters pc = new ProbeParameters(
                         getDouble(settingsProbeDiameter), backend.getMachinePosition(),
@@ -490,9 +510,45 @@ public final class ProbeTopComponent extends TopComponent implements UGSEventLis
                 );
                 //DUMMY renderable
                 //this.zRenderable.setStart(backend.getWorkPosition());
-                ps2.performOutsideCenter(pc);
+                ps2.performOutsideLinearCenter(pc);
             });
 
+        measureInsideLinearCenter.addActionListener(e -> {
+                clearBeforeAction();
+                ProbeParameters pc = new ProbeParameters(
+                        getDouble(settingsProbeDiameter), backend.getMachinePosition(),
+                        0., 0., getDouble(micZDistanceModel),
+                        0., 0., 0., //DUMMY Offset
+                        0., 0., 0.,
+                        getDouble(micAngleModel), getDouble(micXYDistanceModel), getDouble(micOtherSideModel),
+                        0., 0., 0., 0., false, null,
+                        getDouble(settingsFastFindRate), getDouble(settingsSlowMeasureRate),
+                        getDouble(settingsRetractAmount), getUnits(), get(settingsWorkCoordinate),
+                        null
+                );
+                //DUMMY renderable
+                //this.zRenderable.setStart(backend.getWorkPosition());
+                ps2.performInsideLinearCenter(pc);
+            });
+
+        measureInsideCircleCenter.addActionListener(e -> {
+                clearBeforeAction();
+                ProbeParameters pc = new ProbeParameters(
+                        getDouble(settingsProbeDiameter), backend.getMachinePosition(),
+                        0., 0., getDouble(micZDistanceModel),
+                        0., 0., 0., //DUMMY Offset
+                        0., 0., 0.,
+                        getDouble(micAngleModel), getDouble(micXYDistanceModel), getDouble(micOtherSideModel),
+                        0., 0., 0., 0., false, null,
+                        getDouble(settingsFastFindRate), getDouble(settingsSlowMeasureRate),
+                        getDouble(settingsRetractAmount), getUnits(), get(settingsWorkCoordinate),
+                        null
+                );
+                //DUMMY renderable
+                //this.zRenderable.setStart(backend.getWorkPosition());
+                ps2.performInsideCircleCenter(pc);
+            });
+        
         measureAngle.addActionListener(e -> {
                 clearBeforeAction();
                 ProbeParameters pc = new ProbeParameters(
@@ -520,7 +576,7 @@ public final class ProbeTopComponent extends TopComponent implements UGSEventLis
                     clearBeforeAction();
                     ProbeParameters pc = new ProbeParameters(
                             getDouble(settingsProbeDiameter), backend.getMachinePosition(),
-                            0., 0., getDouble(mocZDistanceModel),
+                            0., 0., 0.,
                             0., 0., 0., //DUMMY Offset
                             0., 0., 0.,
                             0., 0., 0.,
@@ -538,7 +594,7 @@ public final class ProbeTopComponent extends TopComponent implements UGSEventLis
                     clearBeforeAction();
                     ProbeParameters pc = new ProbeParameters(
                             getDouble(settingsProbeDiameter), backend.getMachinePosition(),
-                            0., 0., getDouble(mocZDistanceModel),
+                            0., 0., 0.,
                             0., 0., 0., //DUMMY Offset
                             0., 0., 0.,
                             0., 0., 0.,
@@ -556,7 +612,7 @@ public final class ProbeTopComponent extends TopComponent implements UGSEventLis
                     clearBeforeAction();
                     ProbeParameters pc = new ProbeParameters(
                             getDouble(settingsProbeDiameter), backend.getMachinePosition(),
-                            0., 0., getDouble(mocZDistanceModel),
+                            0., 0., 0.,
                             0., 0., 0., //DUMMY Offset
                             0., 0., 0.,
                             0., 0., 0.,
@@ -772,6 +828,11 @@ public final class ProbeTopComponent extends TopComponent implements UGSEventLis
         this.mocXYDistanceModel.addChangeListener(l -> controlChangeListener());
         this.mocOtherSideModel.addChangeListener(l -> controlChangeListener());
 
+        this.micZDistanceModel.addChangeListener(l -> controlChangeListener());
+        this.micAngleModel.addChangeListener(l -> controlChangeListener());
+        this.micXYDistanceModel.addChangeListener(l -> controlChangeListener());
+        this.micOtherSideModel.addChangeListener(l -> controlChangeListener());
+        
         this.angleForwardDistanceModel.addChangeListener(l -> controlChangeListener());
         this.angleStrafeDistanceModel.addChangeListener(l -> controlChangeListener());
         this.angleStartingAngleModel.addChangeListener(l -> controlChangeListener());
@@ -831,6 +892,18 @@ public final class ProbeTopComponent extends TopComponent implements UGSEventLis
                 zRenderable.updateSpacing(getDouble(zProbeDistance), getDouble(zProbeOffset));
                 break;
             case OUTSIDE_CENTER_TAB:
+                //DUMMY
+                active = null;
+//                active = cornerRenderable;
+//                cornerRenderable.updateSpacing(
+//                        getDouble(outsideXDistanceModel),
+//                        getDouble(outsideYDistanceModel),
+//                        0,
+//                        getDouble(outsideXOffsetModel),
+//                        getDouble(outsideYOffsetModel),
+//                        0);
+                break;
+            case INSIDE_CENTER_TAB:
                 //DUMMY
                 active = null;
 //                active = cornerRenderable;
@@ -909,7 +982,9 @@ public final class ProbeTopComponent extends TopComponent implements UGSEventLis
         this.measureXYZ.setEnabled(enabled);
         this.measureInside.setEnabled(enabled);
         this.measureOutside.setEnabled(enabled);
-        this.measureOutsideCenter.setEnabled(enabled);
+        this.measureOutsideLinearCenter.setEnabled(enabled);
+        this.measureInsideLinearCenter.setEnabled(enabled);
+        this.measureInsideCircleCenter.setEnabled(enabled);
         this.zProbeButton.setEnabled(enabled);
         this.measureAngle.setEnabled(enabled);
         this.cutCylinderFromInsideShellButton.setEnabled(enabled);
@@ -1029,8 +1104,24 @@ public final class ProbeTopComponent extends TopComponent implements UGSEventLis
         outsideCenter.add(new JSpinner(mocAngleModel), "growx");
         outsideCenter.add(new JSpinner(mocOtherSideModel), "growx");
 
-        outsideCenter.add(measureOutsideCenter, "spanx 2, spany 2, growx, growy");
+        outsideCenter.add(measureOutsideLinearCenter, "spanx 2, spany 2, growx, growy");
 
+        // INSIDE CENTER TAB
+        JPanel insideCenter = new JPanel(new MigLayout("flowy, wrap 2"));
+        //RAINY Localization?
+        insideCenter.add(new JLabel("Z Probe distance"));
+        insideCenter.add(new JLabel("XY Probe distance"));
+        insideCenter.add(new JSpinner(micZDistanceModel), "growx");
+        insideCenter.add(new JSpinner(micXYDistanceModel), "growx");
+
+        insideCenter.add(new JLabel("Angle")); //RAINY Tooltip explaining degrees, 0=X+, ccw
+        insideCenter.add(new JLabel("Other side"));
+        insideCenter.add(new JSpinner(micAngleModel), "growx");
+        insideCenter.add(new JSpinner(micOtherSideModel), "growx");
+
+        insideCenter.add(measureInsideLinearCenter, "growx, growy");
+        insideCenter.add(measureInsideCircleCenter, "growx, growy");
+        
         // ANGLE TAB
         JPanel angle = new JPanel(new MigLayout("flowy, wrap 3"));
         //RAINY Localization?
@@ -1163,6 +1254,7 @@ public final class ProbeTopComponent extends TopComponent implements UGSEventLis
         jtp.add(Z_TAB, z);
         //jtp.add("inside", inside);
         jtp.add(OUTSIDE_CENTER_TAB, outsideCenter);
+        jtp.add(INSIDE_CENTER_TAB, insideCenter);
         jtp.add(ANGLE_TAB, angle);
         jtp.add(CUTS_TAB, cuts);
         jtp.add(MOVE_TAB, move);
@@ -1231,6 +1323,11 @@ public final class ProbeTopComponent extends TopComponent implements UGSEventLis
         ps.mocXYDistance = getDouble(mocXYDistanceModel);
         ps.mocOtherSide = getDouble(mocOtherSideModel);
 
+        ps.micZDistance = getDouble(micZDistanceModel);
+        ps.micAngle = getDouble(micAngleModel);
+        ps.micXYDistance = getDouble(micXYDistanceModel);
+        ps.micOtherSide = getDouble(micOtherSideModel);
+        
         ps.angleForwardDistance = getDouble(angleForwardDistanceModel);
         ps.angleStrafeDistance = getDouble(angleStrafeDistanceModel);
         ps.angleStartingAngle = getDouble(angleStartingAngleModel);
@@ -1308,6 +1405,11 @@ public final class ProbeTopComponent extends TopComponent implements UGSEventLis
         mocAngleModel.setValue(ps.mocAngle);
         mocXYDistanceModel.setValue(ps.mocXYDistance);
         mocOtherSideModel.setValue(ps.mocOtherSide);
+
+        micZDistanceModel.setValue(ps.micZDistance);
+        micAngleModel.setValue(ps.micAngle);
+        micXYDistanceModel.setValue(ps.micXYDistance);
+        micOtherSideModel.setValue(ps.micOtherSide);
 
         angleForwardDistanceModel.setValue(ps.angleForwardDistance);
         angleStrafeDistanceModel.setValue(ps.angleStrafeDistance);
