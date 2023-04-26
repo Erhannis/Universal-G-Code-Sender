@@ -1519,7 +1519,7 @@ public class ProbeService implements UGSEventListener {
                             target = x + xdir*xcut;
                         }
                         gcode(ABS, SLOW, "X"+f(target), "F"+params.cutFeedRate);
-                        gcode(ABS, SLOW, "X0", "Z"+f(-target/Math.tan(a)), "F"+params.feedRate);
+                        gcode(ABS, SLOW, "X0", "Z"+f(-target/Math.tan(a)), "F"+params.cutFeedRate);
                         gcode(REL, FAST, "X"+f(-xdir*params.retractAmount));
                         gcode(ABS, FAST, "X"+f(target-xdir*params.retractAmount), "Z0");
                         x = target;
@@ -1527,7 +1527,7 @@ public class ProbeService implements UGSEventListener {
                     // We MAY want a final flat cut at bottom depth.  For lathe work, I'm not sure.
                     for (int i = 0; i < finalPasses; i++) {
                         gcode(ABS, SLOW, "X"+f(x), "F"+params.cutFeedRate);
-                        gcode(ABS, SLOW, "X0", "Z"+f(-x/Math.tan(a)), "F"+params.feedRate);
+                        gcode(ABS, SLOW, "X0", "Z"+f(-x/Math.tan(a)), "F"+params.cutFeedRate);
                         gcode(REL, FAST, "X"+f(-xdir*params.retractAmount));
                         gcode(ABS, FAST, "X"+f(x-xdir*params.retractAmount), "Z0");
                     }
