@@ -156,6 +156,7 @@ public final class ProbeTopComponent extends TopComponent implements UGSEventLis
     private SpinnerNumberModel mocXYDistanceModel;
     private SpinnerNumberModel mocOtherSideModel;
     private final JButton measureOutsideLinearCenter = new JButton("Measure outside linear center"); //RAINY Localization
+    private final JButton measureOutsideCircleCenter = new JButton("Measure outside circle center"); //RAINY Localization
 
     // outside center tab
     private static final String INSIDE_CENTER_TAB = "ICenter";
@@ -513,6 +514,24 @@ public final class ProbeTopComponent extends TopComponent implements UGSEventLis
                 ps2.performOutsideLinearCenter(pc);
             });
 
+        measureOutsideCircleCenter.addActionListener(e -> {
+                clearBeforeAction();
+                ProbeParameters pc = new ProbeParameters(
+                        getDouble(settingsProbeDiameter), backend.getMachinePosition(),
+                        0., 0., getDouble(mocZDistanceModel),
+                        0., 0., 0., //DUMMY Offset
+                        0., 0., 0.,
+                        getDouble(mocAngleModel), getDouble(mocXYDistanceModel), getDouble(mocOtherSideModel),
+                        0., 0., 0., 0., false, null,
+                        getDouble(settingsFastFindRate), getDouble(settingsSlowMeasureRate),
+                        getDouble(settingsRetractAmount), getUnits(), get(settingsWorkCoordinate),
+                        null
+                );
+                //DUMMY renderable
+                //this.zRenderable.setStart(backend.getWorkPosition());
+                ps2.performOutsideCircleCenter(pc);
+            });
+        
         measureInsideLinearCenter.addActionListener(e -> {
                 clearBeforeAction();
                 ProbeParameters pc = new ProbeParameters(
@@ -983,6 +1002,7 @@ public final class ProbeTopComponent extends TopComponent implements UGSEventLis
         this.measureInside.setEnabled(enabled);
         this.measureOutside.setEnabled(enabled);
         this.measureOutsideLinearCenter.setEnabled(enabled);
+        this.measureOutsideCircleCenter.setEnabled(enabled);
         this.measureInsideLinearCenter.setEnabled(enabled);
         this.measureInsideCircleCenter.setEnabled(enabled);
         this.zProbeButton.setEnabled(enabled);
@@ -1104,7 +1124,8 @@ public final class ProbeTopComponent extends TopComponent implements UGSEventLis
         outsideCenter.add(new JSpinner(mocAngleModel), "growx");
         outsideCenter.add(new JSpinner(mocOtherSideModel), "growx");
 
-        outsideCenter.add(measureOutsideLinearCenter, "spanx 2, spany 2, growx, growy");
+        outsideCenter.add(measureOutsideLinearCenter, "growx, growy");
+        outsideCenter.add(measureOutsideCircleCenter, "growx, growy");
 
         // INSIDE CENTER TAB
         JPanel insideCenter = new JPanel(new MigLayout("flowy, wrap 2"));

@@ -1,6 +1,7 @@
 Is "probe" (G38.2) really in absolute coords????  the code says "distance"
 Check //UNTESTED periodically
 Move "offset" values into settings
+Reverse probe for compensate backlash?
 
 visualization
   outside corner with negative values gives weird render
@@ -37,6 +38,7 @@ external features?
     (shell, solid)
     x
     (cylinder, square, cube?)
+    in multiple layers?  down, then out, down, then out?
   done:
     cylinder x shell
     cube x solid
@@ -52,6 +54,7 @@ lathe
   *taper
     hmm - permit define offset to surface or something?
     permit max Z
+  FIX: make taper go point first, don't drag shallow angle
   chamfer
     a form of taper?
   round corner
