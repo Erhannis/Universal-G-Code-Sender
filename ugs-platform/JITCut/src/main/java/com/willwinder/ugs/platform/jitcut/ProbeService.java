@@ -851,26 +851,13 @@ public class ProbeService implements UGSEventListener {
 
         String g0Abs = "G90 " + g + " G0";
         String g0Rel = "G91 " + g + " G0";
+        String g0MachineAbs = "G53 G90 " + g + " G0";
         
-        /*
-        // Should find top?  Eh, let z-probe handle that //THINK ...Or SHOULD I?
-        Z-
-        probe 0*
-        probe slow 0*
-        XY0
-        probe 120*
-        probe slow 120*
-        XY0
-        probe 240*
-        probe slow 240*
-        XY0
-        Z0
-        */
-
         continuation = () -> performOutsideCircleCenterInternal(stepNumber + 1);
         try {
             switch (stepNumber) {
                 case 0: {
+                    System.out.println("POCCI 0");
                     // Reset (0,0,0) to make it easier to retract.
                     updateWCS(params.wcsToUpdate, 0.0, 0.0, 0.0);
 
@@ -882,6 +869,7 @@ public class ProbeService implements UGSEventListener {
                     break;
                 }
                 case 1: {
+                    System.out.println("POCCI 1");
                     // Retract angle-
                     gcode(g0Rel + angleToVector(params.angle, retractDistance(params.angleSpacing, params.retractAmount)));
                     // Probe angle+ slow
@@ -889,6 +877,7 @@ public class ProbeService implements UGSEventListener {
                     break;
                 }
                 case 2: {
+                    System.out.println("POCCI 2");
                     // Return to safe spot
                     gcode(g0Abs + " X0.0 Y0.0");
                     gcode(g0Abs + " Z0.0");
@@ -904,6 +893,7 @@ public class ProbeService implements UGSEventListener {
                     break;
                 }
                 case 3: {
+                    System.out.println("POCCI 3");
                     // Retract angle+
                     gcode(g0Rel + angleToVector(params.angle, retractDistance(-params.angleSpacing, params.retractAmount)));
                     // Probe angle- slow
@@ -911,12 +901,12 @@ public class ProbeService implements UGSEventListener {
                     break;
                 }
                 case 4: {
+                    System.out.println("POCCI 4");
                     // Back up
                     gcode(g0Abs + angleToVector(params.angle, params.angleOtherSide));
                     gcode(g0Abs + " Z0.0");
-                    break;
-                }
-                case 5: {
+
+                    System.out.println("POCCI 5");
                     // Once idle, perform calculations.
                     Preconditions.checkState(probePositions.size() == 4, "Unexpected number of probe positions.");
 
@@ -933,10 +923,11 @@ public class ProbeService implements UGSEventListener {
                     double xCenter = (xPosA+xPosB)/2;
                     double yCenter = (yPosA+yPosB)/2;
 
-                    gcode(g0Abs, "X", f(xCenter), "Y", f(yCenter));
-                    break;
-                }
-                case 6: {
+                    System.out.println("POCCI initial center " + xCenter + ", " + yCenter);
+                    
+                    gcode(g0MachineAbs, "X", f(xCenter), "Y", f(yCenter));
+
+                    System.out.println("POCCI 6");
                     // Move to other side
                     gcode(g0Rel + angleToVector(params.angle-90, params.angleOtherSide/2));
                     
@@ -947,21 +938,24 @@ public class ProbeService implements UGSEventListener {
                     probe(angleToVector(params.angle+90, params.angleSpacing), params.feedRate, params.units);
                     break;
                 }
-                case 7: {
+                case 5: {
+                    System.out.println("POCCI 7");
                     // Retract
                     gcode(g0Rel + angleToVector(params.angle+90, retractDistance(params.angleSpacing, params.retractAmount)));
                     // Probe slow
-                    probe(angleToVector(params.angle+90, -params.angleSpacing), params.feedRateSlow, params.units);
+                    probe(angleToVector(params.angle+90, params.angleSpacing), params.feedRateSlow, params.units);
                     break;
                 }
-                case 8: {
+                case 6: {
+                    System.out.println("POCCI 8");
                     // Back up
                     gcode(g0Rel + angleToVector(params.angle+90, retractDistance(params.angleSpacing, params.retractAmount)));
                     gcode(g0Abs + " Z0.0");
                     gcode(g0Abs + " X0.0 Y0.0"); //THINK Go to center instead?
                     break;
                 }
-                case 9: {
+                case 7: {
+                    System.out.println("POCCI 9");
                     // Once idle, perform calculations.
                     Preconditions.checkState(probePositions.size() == 6, "Unexpected number of probe positions.");
 
@@ -1831,7 +1825,7 @@ public class ProbeService implements UGSEventListener {
                 resetProbe();
             } else if (state == ControllerState.IDLE) {
                 // Finalize
-                if (this.currentOperation.getNumProbes() <= this.probePositions.size()) {
+                if (this.currentOperation.getNumProbes() <= this.probePositions.size()) { //CHECK Is this the right way round?  How could it have possibly been wrong this whole time???
                     try {
                         continuation.execute();
                     } catch (Exception e) {
@@ -1841,6 +1835,8 @@ public class ProbeService implements UGSEventListener {
                         params.endPosition = this.backend.getMachinePosition();
                         this.resetProbe();
                     }
+                } else {
+                    System.out.println("Operation ending?: " + this.currentOperation.getNumProbes() + " > " + this.probePositions.size());
                 }
             }
         } else if (evt instanceof ProbeEvent) {
@@ -1850,6 +1846,7 @@ public class ProbeService implements UGSEventListener {
             try {
                 continuation.execute();
             } catch (Exception e) {
+                System.err.println("ERROR "+ e);
                 logger.log(Level.SEVERE,
                         "Exception during " + this.currentOperation + " probe operation.", e);
                 resetProbe();
