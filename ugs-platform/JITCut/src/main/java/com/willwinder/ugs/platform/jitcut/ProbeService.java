@@ -132,6 +132,7 @@ public class ProbeService implements UGSEventListener {
         public final double cutDiameter;
         public final double cutLayerThicknessZ;
         public final double cutDepthZ;
+        public final double cutSkipZ;
         public final double cutFeedRate; //THINK Separate parameter for Z/XY?
         public final boolean cutCCW;
         public final BoxOrder cutBoxOrder;
@@ -151,7 +152,7 @@ public class ProbeService implements UGSEventListener {
                 double xOffset, double yOffset, double zOffset,
                 double xPush, double yPush, double zPush,
                 double angle, double angleSpacing, double angleOtherSide,
-                double cutDiameter, double cutLayerThicknessZ, double cutDepthZ, double cutFeedRate, boolean cutCCW, BoxOrder cutBoxOrder,
+                double cutDiameter, double cutLayerThicknessZ, double cutDepthZ, double cutSkipZ, double cutFeedRate, boolean cutCCW, BoxOrder cutBoxOrder,
                 double feedRate, double feedRateSlow, double retractAmount,
                 Units u, WorkCoordinateSystem wcs,
                 Consumer<Object> callback) {
@@ -173,6 +174,7 @@ public class ProbeService implements UGSEventListener {
             this.cutDiameter = cutDiameter;
             this.cutLayerThicknessZ = cutLayerThicknessZ;
             this.cutDepthZ = cutDepthZ;
+            this.cutSkipZ = cutSkipZ;
             this.cutFeedRate = cutFeedRate;
             this.cutCCW = cutCCW;
             this.cutBoxOrder = cutBoxOrder;
@@ -1129,6 +1131,9 @@ public class ProbeService implements UGSEventListener {
                     //THINK The extra negatives are a bit weird
                     //CHECK How much gcode can we send at once?  Can/should we break it up?
                     double z = 0;
+
+                    gcode(ABS, SLOW, "Z"+f(-params.cutSkipZ), "F"+f(params.cutFeedRate));
+                    z -= params.cutSkipZ;
                     
                     if (helix) {
                         while (true) {

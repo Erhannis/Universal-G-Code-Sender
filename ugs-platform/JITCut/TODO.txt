@@ -39,6 +39,7 @@ external features?
     x
     (cylinder, square, cube?)
     in multiple layers?  down, then out, down, then out?
+    progressive sizes, horizontal
   done:
     cylinder x shell
     cube x solid

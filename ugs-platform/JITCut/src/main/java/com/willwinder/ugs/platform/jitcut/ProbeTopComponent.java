@@ -179,6 +179,7 @@ public final class ProbeTopComponent extends TopComponent implements UGSEventLis
     private SpinnerNumberModel cutDiameterModel;
     private SpinnerNumberModel cutLayerThicknessZModel;
     private SpinnerNumberModel cutDepthZModel;
+    private SpinnerNumberModel cutSkipZModel;
     private SpinnerNumberModel cutFeedRateModel; //RAINY Merge into settings?
     private ButtonModel cutCCWModel;
     private final JButton cutCylinderFromInsideShellButton = new JButton("Cut cylinder shell from inside"); //RAINY Localization
@@ -293,6 +294,7 @@ public final class ProbeTopComponent extends TopComponent implements UGSEventLis
         public double cutDiameter;
         public double cutLayerThicknessZ;
         public double cutDepthZ;
+        public double cutSkipZ;
         public double cutFeedRate; //THINK Separate parameter for Z/XY?
         public boolean cutCCW;
         public double cutXDir;
@@ -398,6 +400,7 @@ public final class ProbeTopComponent extends TopComponent implements UGSEventLis
         cutDiameterModel = new SpinnerNumberModel(20., -largeSpinner, largeSpinner, 0.1);
         cutLayerThicknessZModel = new SpinnerNumberModel(2., -largeSpinner, largeSpinner, 0.1);
         cutDepthZModel = new SpinnerNumberModel(10., -largeSpinner, largeSpinner, 0.1);
+        cutSkipZModel = new SpinnerNumberModel(0., -largeSpinner, largeSpinner, 0.1);
         cutFeedRateModel = new SpinnerNumberModel(30., 1, largeSpinner, 0.1);
         cutCCWModel = new JToggleButton.ToggleButtonModel();
         cutCCWModel.setSelected(true);
@@ -443,7 +446,7 @@ public final class ProbeTopComponent extends TopComponent implements UGSEventLis
                         getDouble(xyzXOffsetModel), getDouble(xyzYOffsetModel), getDouble(xyzZOffsetModel),
                         getDouble(xyzXPushModel), getDouble(xyzYPushModel), getDouble(xyzZPushModel), //THINK Final push not used
                         0., 0., 0.,
-                        0., 0., 0., 0., false, null,
+                        0., 0., 0., 0., 0., false, null,
                         getDouble(settingsFastFindRate), getDouble(settingsSlowMeasureRate),
                         getDouble(settingsRetractAmount), getUnits(), get(settingsWorkCoordinate),
                         null
@@ -460,7 +463,7 @@ public final class ProbeTopComponent extends TopComponent implements UGSEventLis
                         getDouble(outsideXOffsetModel), getDouble(outsideYOffsetModel), 0.,
                         getDouble(outsideXPushModel), getDouble(outsideYPushModel), 0., //THINK Final push not used
                         0., 0., 0.,
-                        0., 0., 0., 0., false, null,
+                        0., 0., 0., 0., 0., false, null,
                         getDouble(settingsFastFindRate), getDouble(settingsSlowMeasureRate),
                         getDouble(settingsRetractAmount), getUnits(), get(settingsWorkCoordinate),
                         null
@@ -487,7 +490,7 @@ public final class ProbeTopComponent extends TopComponent implements UGSEventLis
                         0., 0., getDouble(zProbeOffset),
                         0., 0., 0.,
                         0., 0., 0.,
-                        0., 0., 0., 0., false, null,
+                        0., 0., 0., 0., 0., false, null,
                         getDouble(settingsFastFindRate), getDouble(settingsSlowMeasureRate),
                         getDouble(settingsRetractAmount), getUnits(), get(settingsWorkCoordinate),
                         null
@@ -504,7 +507,7 @@ public final class ProbeTopComponent extends TopComponent implements UGSEventLis
                         0., 0., 0., //DUMMY Offset
                         0., 0., 0.,
                         getDouble(mocAngleModel), getDouble(mocXYDistanceModel), getDouble(mocOtherSideModel),
-                        0., 0., 0., 0., false, null,
+                        0., 0., 0., 0., 0., false, null,
                         getDouble(settingsFastFindRate), getDouble(settingsSlowMeasureRate),
                         getDouble(settingsRetractAmount), getUnits(), get(settingsWorkCoordinate),
                         null
@@ -522,7 +525,7 @@ public final class ProbeTopComponent extends TopComponent implements UGSEventLis
                         0., 0., 0., //DUMMY Offset
                         0., 0., 0.,
                         getDouble(mocAngleModel), getDouble(mocXYDistanceModel), getDouble(mocOtherSideModel),
-                        0., 0., 0., 0., false, null,
+                        0., 0., 0., 0., 0., false, null,
                         getDouble(settingsFastFindRate), getDouble(settingsSlowMeasureRate),
                         getDouble(settingsRetractAmount), getUnits(), get(settingsWorkCoordinate),
                         null
@@ -540,7 +543,7 @@ public final class ProbeTopComponent extends TopComponent implements UGSEventLis
                         0., 0., 0., //DUMMY Offset
                         0., 0., 0.,
                         getDouble(micAngleModel), getDouble(micXYDistanceModel), getDouble(micOtherSideModel),
-                        0., 0., 0., 0., false, null,
+                        0., 0., 0., 0., 0., false, null,
                         getDouble(settingsFastFindRate), getDouble(settingsSlowMeasureRate),
                         getDouble(settingsRetractAmount), getUnits(), get(settingsWorkCoordinate),
                         null
@@ -558,7 +561,7 @@ public final class ProbeTopComponent extends TopComponent implements UGSEventLis
                         0., 0., 0., //DUMMY Offset
                         0., 0., 0.,
                         getDouble(micAngleModel), getDouble(micXYDistanceModel), getDouble(micOtherSideModel),
-                        0., 0., 0., 0., false, null,
+                        0., 0., 0., 0., 0., false, null,
                         getDouble(settingsFastFindRate), getDouble(settingsSlowMeasureRate),
                         getDouble(settingsRetractAmount), getUnits(), get(settingsWorkCoordinate),
                         null
@@ -576,7 +579,7 @@ public final class ProbeTopComponent extends TopComponent implements UGSEventLis
                         0., 0., 0., //DUMMY Offset
                         0., 0., 0.,
                         getDouble(angleStartingAngleModel), getDouble(angleForwardDistanceModel), getDouble(angleStrafeDistanceModel),
-                        0., 0., 0., 0., false, null,
+                        0., 0., 0., 0., 0., false, null,
                         getDouble(settingsFastFindRate), getDouble(settingsSlowMeasureRate),
                         getDouble(settingsRetractAmount), getUnits(), get(settingsWorkCoordinate),
                         (angle) -> {
@@ -599,7 +602,7 @@ public final class ProbeTopComponent extends TopComponent implements UGSEventLis
                             0., 0., 0., //DUMMY Offset
                             0., 0., 0.,
                             0., 0., 0.,
-                            getDouble(cutDiameterModel)-getDouble(settingsProbeDiameter), getDouble(cutLayerThicknessZModel), getDouble(cutDepthZModel), getDouble(cutFeedRateModel), cutCCWModel.isSelected(), null,
+                            getDouble(cutDiameterModel)-getDouble(settingsProbeDiameter), getDouble(cutLayerThicknessZModel), getDouble(cutDepthZModel), getDouble(cutSkipZModel), getDouble(cutFeedRateModel), cutCCWModel.isSelected(), null,
                             getDouble(settingsFastFindRate), getDouble(settingsSlowMeasureRate),
                             getDouble(settingsRetractAmount), getUnits(), get(settingsWorkCoordinate),
                             null
@@ -617,7 +620,7 @@ public final class ProbeTopComponent extends TopComponent implements UGSEventLis
                             0., 0., 0., //DUMMY Offset
                             0., 0., 0.,
                             0., 0., 0.,
-                            getDouble(cutDiameterModel), getDouble(cutLayerThicknessZModel), getDouble(cutDepthZModel), getDouble(cutFeedRateModel), cutCCWModel.isSelected(), null,
+                            getDouble(cutDiameterModel), getDouble(cutLayerThicknessZModel), getDouble(cutDepthZModel), getDouble(cutSkipZModel), getDouble(cutFeedRateModel), cutCCWModel.isSelected(), null,
                             getDouble(settingsFastFindRate), getDouble(settingsSlowMeasureRate),
                             getDouble(settingsRetractAmount), getUnits(), get(settingsWorkCoordinate),
                             null
@@ -635,7 +638,7 @@ public final class ProbeTopComponent extends TopComponent implements UGSEventLis
                             0., 0., 0., //DUMMY Offset
                             0., 0., 0.,
                             0., 0., 0.,
-                            getDouble(cutDiameterModel)+getDouble(settingsProbeDiameter), getDouble(cutLayerThicknessZModel), getDouble(cutDepthZModel), getDouble(cutFeedRateModel), cutCCWModel.isSelected(), null,
+                            getDouble(cutDiameterModel)+getDouble(settingsProbeDiameter), getDouble(cutLayerThicknessZModel), getDouble(cutDepthZModel), getDouble(cutSkipZModel), getDouble(cutFeedRateModel), cutCCWModel.isSelected(), null,
                             getDouble(settingsFastFindRate), getDouble(settingsSlowMeasureRate),
                             getDouble(settingsRetractAmount), getUnits(), get(settingsWorkCoordinate),
                             null
@@ -653,7 +656,7 @@ public final class ProbeTopComponent extends TopComponent implements UGSEventLis
                         0., 0., 0., //DUMMY Offset
                         getDouble(cutXLayerModel), getDouble(cutYLayerModel), getDouble(cutZLayerModel),
                         0., 0., 0.,
-                        0., 0., 0., getDouble(cutFeedRateModel), false, boxOrder,
+                        0., 0., 0., 0., getDouble(cutFeedRateModel), false, boxOrder,
                         getDouble(settingsFastFindRate), getDouble(settingsSlowMeasureRate),
                         getDouble(settingsRetractAmount), getUnits(), get(settingsWorkCoordinate),
                         null
@@ -694,7 +697,7 @@ public final class ProbeTopComponent extends TopComponent implements UGSEventLis
                             0., 0., 0., //DUMMY Offset
                             0., 0., 0.,
                             getDouble(moveAddAngleModel), 0., 0.,
-                            0., 0., 0., 0., false, null,
+                            0., 0., 0., 0., 0., false, null,
                             getDouble(settingsFastFindRate), getDouble(settingsSlowMeasureRate),
                             getDouble(settingsRetractAmount), getUnits(), get(settingsWorkCoordinate),
                             null
@@ -711,7 +714,7 @@ public final class ProbeTopComponent extends TopComponent implements UGSEventLis
                             0., 0., 0., //DUMMY Offset
                             0., 0., 0.,
                             getDouble(moveAddAngleModel), 0., 0.,
-                            0., 0., 0., 0., false, null,
+                            0., 0., 0., 0., 0., false, null,
                             getDouble(settingsFastFindRate), getDouble(settingsSlowMeasureRate),
                             getDouble(settingsRetractAmount), getUnits(), get(settingsWorkCoordinate),
                             null
@@ -728,7 +731,7 @@ public final class ProbeTopComponent extends TopComponent implements UGSEventLis
                             0., 0., 0., //DUMMY Offset
                             0., 0., 0.,
                             90+getDouble(moveAddAngleModel), 0., 0.,
-                            0., 0., 0., 0., false, null,
+                            0., 0., 0., 0., 0., false, null,
                             getDouble(settingsFastFindRate), getDouble(settingsSlowMeasureRate),
                             getDouble(settingsRetractAmount), getUnits(), get(settingsWorkCoordinate),
                             null
@@ -745,7 +748,7 @@ public final class ProbeTopComponent extends TopComponent implements UGSEventLis
                             0., 0., 0., //DUMMY Offset
                             0., 0., 0.,
                             90+getDouble(moveAddAngleModel), 0., 0.,
-                            0., 0., 0., 0., false, null,
+                            0., 0., 0., 0., 0., false, null,
                             getDouble(settingsFastFindRate), getDouble(settingsSlowMeasureRate),
                             getDouble(settingsRetractAmount), getUnits(), get(settingsWorkCoordinate),
                             null
@@ -765,7 +768,7 @@ public final class ProbeTopComponent extends TopComponent implements UGSEventLis
                             0., 0., 0., //DUMMY Offset
                             0., 0., 0.,
                             getDouble(latheTaperAngleModel), 0., 0.,
-                            0., getDouble(latheLayerThicknessModel), 0., getDouble(latheFeedRateModel), false, null,
+                            0., getDouble(latheLayerThicknessModel), 0., getDouble(latheFeedRateModel), 0., false, null,
                             getDouble(settingsFastFindRate), getDouble(settingsSlowMeasureRate),
                             getDouble(settingsRetractAmount), getUnits(), get(settingsWorkCoordinate),
                             null
@@ -783,7 +786,7 @@ public final class ProbeTopComponent extends TopComponent implements UGSEventLis
                             0., 0., 0., //DUMMY Offset
                             0., 0., 0.,
                             getDouble(latheTaperAngleModel), 0., 0.,
-                            0., getDouble(latheLayerThicknessModel), 0., getDouble(latheFeedRateModel), false, null,
+                            0., getDouble(latheLayerThicknessModel), 0., 0., getDouble(latheFeedRateModel), false, null,
                             getDouble(settingsFastFindRate), getDouble(settingsSlowMeasureRate),
                             getDouble(settingsRetractAmount), getUnits(), get(settingsWorkCoordinate),
                             null
@@ -801,7 +804,7 @@ public final class ProbeTopComponent extends TopComponent implements UGSEventLis
                             0., 0., 0., //DUMMY Offset
                             0., 0., 0.,
                             getDouble(latheTaperAngleModel), 0., 0.,
-                            0., getDouble(latheLayerThicknessModel), 0., getDouble(latheFeedRateModel), false, null,
+                            0., getDouble(latheLayerThicknessModel), 0., 0., getDouble(latheFeedRateModel), false, null,
                             getDouble(settingsFastFindRate), getDouble(settingsSlowMeasureRate),
                             getDouble(settingsRetractAmount), getUnits(), get(settingsWorkCoordinate),
                             null
@@ -859,6 +862,7 @@ public final class ProbeTopComponent extends TopComponent implements UGSEventLis
         this.cutDiameterModel.addChangeListener(l -> controlChangeListener());
         this.cutLayerThicknessZModel.addChangeListener(l -> controlChangeListener());
         this.cutDepthZModel.addChangeListener(l -> controlChangeListener());
+        this.cutSkipZModel.addChangeListener(l -> controlChangeListener());
         this.cutFeedRateModel.addChangeListener(l -> controlChangeListener());
         this.cutCCWModel.addChangeListener(l -> controlChangeListener());
         this.cutXDirModel.addChangeListener(l -> controlChangeListener());
@@ -1161,17 +1165,17 @@ public final class ProbeTopComponent extends TopComponent implements UGSEventLis
         cuts.add(new JLabel("Diameter"));
         cuts.add(new JLabel("Layer thickness Z"));
         cuts.add(new JLabel("Depth Z"));
+        cuts.add(new JLabel("Skip Z"));
         cuts.add(new JLabel("Cut feed rate"));
         JCheckBox cbCcw = new JCheckBox("Cut CCW");
         cbCcw.setModel(cutCCWModel);
         cuts.add(cbCcw);
-        cuts.add(new JLabel(""));
         
         cuts.add(new JSpinner(cutDiameterModel), "growx");
         cuts.add(new JSpinner(cutLayerThicknessZModel), "growx");
         cuts.add(new JSpinner(cutDepthZModel), "growx");
+        cuts.add(new JSpinner(cutSkipZModel), "growx");
         cuts.add(new JSpinner(cutFeedRateModel), "growx");
-        cuts.add(new JLabel(""));
         cuts.add(new JLabel(""));
 
         cuts.add(cutCylinderFromInsideShellButton, "growx, growy");
@@ -1356,6 +1360,7 @@ public final class ProbeTopComponent extends TopComponent implements UGSEventLis
         ps.cutDiameter = getDouble(cutDiameterModel);
         ps.cutLayerThicknessZ = getDouble(cutLayerThicknessZModel);
         ps.cutDepthZ = getDouble(cutDepthZModel);
+        ps.cutSkipZ = getDouble(cutSkipZModel);
         ps.cutFeedRate = getDouble(cutFeedRateModel);
         ps.cutCCW = cutCCWModel.isSelected();
         ps.cutXDir = getDouble(cutXDirModel);
@@ -1439,6 +1444,7 @@ public final class ProbeTopComponent extends TopComponent implements UGSEventLis
         cutDiameterModel.setValue(ps.cutDiameter);
         cutLayerThicknessZModel.setValue(ps.cutLayerThicknessZ);
         cutDepthZModel.setValue(ps.cutDepthZ);
+        cutSkipZModel.setValue(ps.cutSkipZ);
         cutFeedRateModel.setValue(ps.cutFeedRate);
         cutCCWModel.setSelected(ps.cutCCW);
         cutXDirModel.setValue(ps.cutXDir);
