@@ -1,5 +1,5 @@
 /*
-    Copyright 2013-2018 Will Winder
+    Copyright 2013-2024 Will Winder
 
     This file is part of Universal Gcode Sender (UGS).
 
@@ -23,6 +23,7 @@ import com.willwinder.universalgcodesender.communicator.event.ICommunicatorEvent
 import com.willwinder.universalgcodesender.connection.Connection;
 import com.willwinder.universalgcodesender.connection.ConnectionDriver;
 import com.willwinder.universalgcodesender.connection.ConnectionFactory;
+import com.willwinder.universalgcodesender.connection.IConnectionListener;
 import com.willwinder.universalgcodesender.i18n.Localization;
 
 import java.io.IOException;
@@ -33,7 +34,7 @@ import java.util.logging.Logger;
  *
  * @author wwinder
  */
-public abstract class AbstractCommunicator implements ICommunicator {
+public abstract class AbstractCommunicator implements ICommunicator, IConnectionListener {
     private static final Logger logger = Logger.getLogger(AbstractCommunicator.class.getName());
 
     private final ICommunicatorEventDispatcher eventDispatcher;
@@ -63,7 +64,9 @@ public abstract class AbstractCommunicator implements ICommunicator {
     @Override
     public void setConnection(Connection c) {
         connection = c;
-        c.addListener(this);
+        if (c != null) {
+            c.addListener(this);
+        }
     }
 
     //do common operations (related to the connection, that is shared by all communicators)
@@ -75,15 +78,12 @@ public abstract class AbstractCommunicator implements ICommunicator {
             logger.info("Connecting to controller using class: " + connection.getClass().getSimpleName() + " with url " + url);
         }
 
-        if (connection != null) {
-            connection.addListener(this);
-        }
-
+        // Abort if we still have not got a connection
         if (connection == null) {
             throw new Exception(Localization.getString("communicator.exception.port") + ": " + name);
         }
 
-        //open it
+        connection.addListener(this);
         if (!connection.openPort()) {
             throw new Exception("Could not connect to controller on port " + url);
         }
@@ -99,7 +99,9 @@ public abstract class AbstractCommunicator implements ICommunicator {
     @Override
     public void disconnect() throws Exception {
         eventDispatcher.reset();
-        connection.closePort();
+        if (connection != null) {
+            connection.closePort();
+        }
     }
 
     /* ****************** */
@@ -122,5 +124,10 @@ public abstract class AbstractCommunicator implements ICommunicator {
     @Override
     public void xmodemSend(byte[] data) throws IOException {
         connection.xmodemSend(data);
+    }
+
+    @Override
+    public void onConnectionClosed() {
+        eventDispatcher.onConnectionClosed();
     }
 }

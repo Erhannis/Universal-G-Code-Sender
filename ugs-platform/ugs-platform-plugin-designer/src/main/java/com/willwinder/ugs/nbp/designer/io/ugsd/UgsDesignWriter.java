@@ -4,17 +4,32 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.willwinder.ugs.nbp.designer.entities.Entity;
 import com.willwinder.ugs.nbp.designer.entities.EntityGroup;
+import com.willwinder.ugs.nbp.designer.entities.cuttable.Cuttable;
+import com.willwinder.ugs.nbp.designer.entities.cuttable.Ellipse;
+import com.willwinder.ugs.nbp.designer.entities.cuttable.Path;
 import com.willwinder.ugs.nbp.designer.entities.cuttable.Point;
 import com.willwinder.ugs.nbp.designer.entities.cuttable.Rectangle;
-import com.willwinder.ugs.nbp.designer.entities.cuttable.*;
+import com.willwinder.ugs.nbp.designer.entities.cuttable.Text;
+import com.willwinder.ugs.nbp.designer.io.AffineTransformSerializer;
 import com.willwinder.ugs.nbp.designer.io.DesignWriter;
 import com.willwinder.ugs.nbp.designer.io.DesignWriterException;
-import com.willwinder.ugs.nbp.designer.io.ugsd.v1.*;
+import com.willwinder.ugs.nbp.designer.io.ugsd.v1.CutTypeV1;
+import com.willwinder.ugs.nbp.designer.io.ugsd.v1.CuttableEntityV1;
+import com.willwinder.ugs.nbp.designer.io.ugsd.v1.DesignV1;
+import com.willwinder.ugs.nbp.designer.io.ugsd.v1.EntityEllipseV1;
+import com.willwinder.ugs.nbp.designer.io.ugsd.v1.EntityGroupV1;
+import com.willwinder.ugs.nbp.designer.io.ugsd.v1.EntityPathSegmentV1;
+import com.willwinder.ugs.nbp.designer.io.ugsd.v1.EntityPathTypeV1;
+import com.willwinder.ugs.nbp.designer.io.ugsd.v1.EntityPathV1;
+import com.willwinder.ugs.nbp.designer.io.ugsd.v1.EntityPointV1;
+import com.willwinder.ugs.nbp.designer.io.ugsd.v1.EntityRectangleV1;
+import com.willwinder.ugs.nbp.designer.io.ugsd.v1.EntityTextV1;
+import com.willwinder.ugs.nbp.designer.io.ugsd.v1.EntityV1;
 import com.willwinder.ugs.nbp.designer.logic.Controller;
 import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang3.StringUtils;
 
-import java.awt.*;
+import java.awt.Shape;
 import java.awt.geom.AffineTransform;
 import java.awt.geom.PathIterator;
 import java.io.File;
@@ -25,7 +40,6 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.stream.Collectors;
 
 /**
  * Writes the design to a stream or file in the latest design format.
@@ -45,22 +59,28 @@ public class UgsDesignWriter implements DesignWriter {
     @Override
     public void write(OutputStream outputStream, Controller controller) {
         try {
-            Gson gson = new GsonBuilder().setPrettyPrinting().create();
+            Gson gson = createGsonParser();
             DesignV1 design = new DesignV1();
-            design.setSettings(convertSettings(controller));
 
-            EntityGroup rootEntity = (EntityGroup) controller.getDrawing().getRootEntity();
-            design.setEntities(rootEntity.getChildren().stream().map(this::convertToEntity).collect(Collectors.toList()));
+            EntityGroup rootEntity = controller.getDrawing().getRootEntity();
+            design.setEntities(rootEntity.getChildren().stream().map(this::convertToEntity).toList());
             IOUtils.write(gson.toJson(design), outputStream, StandardCharsets.UTF_8);
         } catch (Exception e) {
             throw new DesignWriterException("Could not write to file", e);
         }
     }
 
+    private static Gson createGsonParser() {
+        return new GsonBuilder()
+                .registerTypeAdapter(AffineTransform.class, new AffineTransformSerializer())
+                .setPrettyPrinting()
+                .create();
+    }
+
     private EntityV1 convertToEntity(Entity entity) {
         EntityV1 result;
-        if (entity instanceof EntityGroup) {
-            result = parseGroup((EntityGroup) entity);
+        if (entity instanceof EntityGroup entityGroup) {
+            result = parseGroup(entityGroup);
         } else if (entity instanceof Rectangle) {
             result = parseRectangle(entity);
         } else if (entity instanceof Ellipse) {
@@ -69,8 +89,8 @@ public class UgsDesignWriter implements DesignWriter {
             result = parsePath(entity);
         } else if (entity instanceof Point) {
             result = parsePoint(entity);
-        } else if (entity instanceof Text) {
-            result = parseText((Text) entity);
+        } else if (entity instanceof Text text) {
+            result = parseText(text);
         } else {
             return null;
         }
@@ -79,13 +99,14 @@ public class UgsDesignWriter implements DesignWriter {
             result.setName(entity.getName());
         }
 
-        if (entity instanceof Cuttable && result instanceof CuttableEntityV1) {
-            Cuttable cuttable = (Cuttable) entity;
-            CuttableEntityV1 cuttableEntity = ((CuttableEntityV1) result);
+        if (entity instanceof Cuttable cuttable && result instanceof CuttableEntityV1 cuttableEntity) {
             cuttableEntity.setStartDepth(cuttable.getStartDepth());
             cuttableEntity.setCutDepth(cuttable.getTargetDepth());
             cuttableEntity.setCutType(CutTypeV1.fromCutType(cuttable.getCutType()));
             cuttableEntity.setHidden(cuttable.isHidden());
+            cuttableEntity.setSpindleSpeed(cuttable.getSpindleSpeed());
+            cuttableEntity.setPasses(cuttable.getPasses());
+            cuttableEntity.setFeedRate(cuttable.getFeedRate());
         }
         return result;
     }
@@ -129,7 +150,7 @@ public class UgsDesignWriter implements DesignWriter {
                 .filter(Cuttable.class::isInstance)
                 .map(Cuttable.class::cast)
                 .map(this::convertToEntity)
-                .collect(Collectors.toList()));
+                .toList());
         return group;
     }
 
@@ -145,20 +166,6 @@ public class UgsDesignWriter implements DesignWriter {
             pathIterator.next();
         }
         return segments;
-    }
-
-    private SettingsV1 convertSettings(Controller controller) {
-        SettingsV1 settings = new SettingsV1();
-        settings.setFeedSpeed(controller.getSettings().getFeedSpeed());
-        settings.setDepthPerPass(controller.getSettings().getDepthPerPass());
-        settings.setStockThickness(controller.getSettings().getStockThickness());
-        settings.setPlungeSpeed(controller.getSettings().getPlungeSpeed());
-        settings.setPreferredUnits(controller.getSettings().getPreferredUnits());
-        settings.setSafeHeight(controller.getSettings().getSafeHeight());
-        settings.setToolDiameter(controller.getSettings().getToolDiameter());
-        settings.setToolStepOver(controller.getSettings().getToolStepOver());
-        settings.setSpindleSpeed(controller.getSettings().getSpindleSpeed());
-        return settings;
     }
 
     private EntityPathSegmentV1 convertCoordinatesToPathSegment(int segmentType, double[] coordinates) {
@@ -188,9 +195,9 @@ public class UgsDesignWriter implements DesignWriter {
     }
 
     public String serialize(List<Entity> entities) {
-        Gson gson = new Gson();
+        Gson gson = createGsonParser();
         return gson.toJson(entities.stream()
                 .map(this::convertToEntity)
-                .collect(Collectors.toList()));
+                .toList());
     }
 }

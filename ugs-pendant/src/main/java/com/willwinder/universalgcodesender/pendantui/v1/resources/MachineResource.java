@@ -1,3 +1,21 @@
+/*
+    Copyright 2023 Will Winder
+
+    This file is part of Universal Gcode Sender (UGS).
+
+    UGS is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    UGS is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with UGS.  If not, see <http://www.gnu.org/licenses/>.
+ */
 package com.willwinder.universalgcodesender.pendantui.v1.resources;
 
 import com.google.gson.JsonObject;
@@ -5,6 +23,7 @@ import com.google.gson.JsonPrimitive;
 import com.willwinder.universalgcodesender.IController;
 import com.willwinder.universalgcodesender.connection.ConnectionDriver;
 import com.willwinder.universalgcodesender.connection.ConnectionFactory;
+import com.willwinder.universalgcodesender.connection.IConnectionDevice;
 import com.willwinder.universalgcodesender.model.Axis;
 import com.willwinder.universalgcodesender.model.BackendAPI;
 import com.willwinder.universalgcodesender.model.BaudRateEnum;
@@ -13,17 +32,17 @@ import com.willwinder.universalgcodesender.services.JogService;
 import com.willwinder.universalgcodesender.utils.FirmwareUtils;
 import com.willwinder.universalgcodesender.utils.Settings;
 import com.willwinder.universalgcodesender.utils.SettingsFactory;
+import jakarta.inject.Inject;
+import jakarta.ws.rs.Consumes;
+import jakarta.ws.rs.GET;
+import jakarta.ws.rs.NotAcceptableException;
+import jakarta.ws.rs.NotFoundException;
+import jakarta.ws.rs.POST;
+import jakarta.ws.rs.Path;
+import jakarta.ws.rs.Produces;
+import jakarta.ws.rs.QueryParam;
+import jakarta.ws.rs.core.MediaType;
 
-import javax.inject.Inject;
-import javax.ws.rs.Consumes;
-import javax.ws.rs.GET;
-import javax.ws.rs.NotAcceptableException;
-import javax.ws.rs.NotFoundException;
-import javax.ws.rs.POST;
-import javax.ws.rs.Path;
-import javax.ws.rs.Produces;
-import javax.ws.rs.QueryParam;
-import javax.ws.rs.core.MediaType;
 import java.io.BufferedReader;
 import java.io.StringReader;
 import java.util.Arrays;
@@ -31,7 +50,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
-@Path("/v1/machine")
+@Path("/machine")
 public class MachineResource {
 
     @Inject
@@ -63,7 +82,9 @@ public class MachineResource {
     @Produces(MediaType.APPLICATION_JSON)
     public List<String> getPortList() {
         ConnectionDriver connectionDriver = SettingsFactory.loadSettings().getConnectionDriver();
-        return ConnectionFactory.getPortNames(connectionDriver);
+        return ConnectionFactory.getDevices(connectionDriver).stream()
+                .map(IConnectionDevice::getAddress)
+                .toList();
     }
 
     @GET
@@ -92,7 +113,7 @@ public class MachineResource {
     @GET
     @Path("getSelectedBaudRate")
     @Produces(MediaType.APPLICATION_JSON)
-    public String getSelectedFBaudRate() {
+    public String getSelectedBaudRate() {
         JsonObject jsonObject = new JsonObject();
         jsonObject.add("selectedBaudRate", new JsonPrimitive(SettingsFactory.loadSettings().getPortRate()));
         return jsonObject.toString();

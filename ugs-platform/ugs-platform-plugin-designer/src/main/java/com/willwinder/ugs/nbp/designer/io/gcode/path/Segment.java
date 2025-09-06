@@ -22,6 +22,7 @@ import com.willwinder.universalgcodesender.model.PartialPosition;
  * Path segment
  *
  * @author Calle Laakkonen
+ * @author Joacim Breiler
  */
 public final class Segment {
     /**
@@ -39,6 +40,24 @@ public final class Segment {
      */
     public final String label;
 
+    /**
+     * The current spindle speed
+     */
+    private final Integer spindleSpeed;
+
+    /**
+     * The current feed speed
+     */
+    private final Integer feedSpeed;
+
+    public Segment(SegmentType type, PartialPosition point, String label, Integer spindleSpeed, Integer feedSpeed) {
+        this.type = type;
+        this.point = point;
+        this.label = label;
+        this.spindleSpeed = spindleSpeed;
+        this.feedSpeed = feedSpeed;
+    }
+
     public Segment(SegmentType type, PartialPosition point) {
         this(type, point, null);
     }
@@ -46,19 +65,8 @@ public final class Segment {
     public Segment(String label) {
         this(SegmentType.SEAM, null, label);
     }
-
     public Segment(SegmentType type, PartialPosition point, String label) {
-        this.type = type;
-        this.point = point;
-        this.label = label;
-    }
-
-    @Override
-    public String toString() {
-        if (label == null)
-            return type.name() + " " + point;
-        else
-            return type.name() + " " + point + '(' + label + ')';
+        this(type, point, label, null, null);
     }
 
     /**
@@ -90,5 +98,13 @@ public final class Segment {
             throw new NullPointerException(type + " segment has no point!");
 
         return point;
+    }
+
+    public Integer getSpindleSpeed() {
+        return spindleSpeed;
+    }
+
+    public Integer getFeedSpeed() {
+        return feedSpeed;
     }
 }

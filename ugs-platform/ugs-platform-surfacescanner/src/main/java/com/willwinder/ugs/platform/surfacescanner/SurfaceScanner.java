@@ -1,5 +1,5 @@
 /*
-    Copyright 2017 Will Winder
+    Copyright 2017-2023 Will Winder
 
     This file is part of Universal Gcode Sender (UGS).
 
@@ -18,164 +18,308 @@
  */
 package com.willwinder.ugs.platform.surfacescanner;
 
-import com.google.common.collect.ImmutableCollection;
 import com.google.common.collect.ImmutableList;
+import com.willwinder.universalgcodesender.gcode.util.GcodeUtils;
+import com.willwinder.universalgcodesender.model.BackendAPI;
+import com.willwinder.universalgcodesender.model.PartialPosition;
 import com.willwinder.universalgcodesender.model.Position;
+import com.willwinder.universalgcodesender.model.UnitUtils;
 import com.willwinder.universalgcodesender.model.UnitUtils.Units;
+import com.willwinder.universalgcodesender.model.events.ProbeEvent;
+import com.willwinder.universalgcodesender.utils.AutoLevelSettings;
+import static com.willwinder.universalgcodesender.utils.MathUtils.isEqual;
+
+import java.util.Deque;
+import java.util.LinkedList;
+import java.util.Optional;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /**
- *
  * @author wwinder
  */
 public class SurfaceScanner {
-    private ImmutableCollection<Position> probePositions;
-    private Position[][] probePositionGrid;
+    private static final Logger logger = Logger.getLogger(SurfaceScanner.class.getSimpleName());
 
-    // step error 
-    final private static double STEP_OFFSET = 1;
-    
-    private Units units = null;
-    private Position minXYZ = null;
-    private Position maxXYZ = null;
-    private Position probeOffset = null;
-    private double resolution = 1;
-    private double probeDistance = 0;
-    private int yAxisPoints = -1;
-    private int xAxisPoints = -1;
-    private int countProbe = 0;
-    private boolean scanningSurface = false;
-    
-    public SurfaceScanner() {
-        probeOffset = new Position(Units.MM);
-    }
+    private final BackendAPI backend;
+    private final AutoLevelSettings settings;
+    private final Set<SurfaceScannerListener> listeners = ConcurrentHashMap.newKeySet();
+    private Position[][] probePositionGrid = new Position[0][0];
+    private Deque<Position> pendingPositions = new LinkedList<>();
+    private Position minXYZ = Position.ZERO;
+    private Position maxXYZ = Position.ZERO;
+    private Position machineWorkOffset = new Position(Units.MM);
 
-    public void probeEvent(final Position p) {      
-        Position pOffset = new Position(
-                p.x + probeOffset.x, 
-                p.y + probeOffset.y, 
-                p.z + probeOffset.z, Units.MM).getPositionIn(units);
-        
-        Position pCount = probePositions.asList().get(countProbe);
-        
-        double pCountMinX = pCount.x - STEP_OFFSET;
-        double pCountMaxX = pCount.x + STEP_OFFSET;
-        double pCountMinY = pCount.y - STEP_OFFSET;
-        double pCountMaxY = pCount.y + STEP_OFFSET;
-              
-        if(pOffset.x >= pCountMinX && pOffset.x <= pCountMaxX &&
-           pOffset.y >= pCountMinY && pOffset.y <= pCountMaxY)
-        {
-            probePositionGrid[countProbe / yAxisPoints][countProbe % yAxisPoints] = pOffset.getPositionIn(units);
-            pCount.z = pOffset.z;
-            
-            countProbe++;
-            if(countProbe >= probePositions.size())
-                scanningSurface = false;
-            
-        } else{
-            scanningSurface = false;
-            throw new IllegalArgumentException("Error in probe reference.");
-        }
+    private final AtomicBoolean isScanning = new AtomicBoolean(false);
+
+    public SurfaceScanner(BackendAPI backend) {
+        this.backend = backend;
+        this.settings = backend.getSettings().getAutoLevelSettings();
+        Position minPosition = new Position(settings.getMinX(), settings.getMinY(), settings.getMinZ(), backend.getSettings().getPreferredUnits());
+        Position maxPosition = new Position(settings.getMaxX(), settings.getMaxY(), settings.getMaxZ(), backend.getSettings().getPreferredUnits());
+        update(minPosition, maxPosition);
     }
 
     /**
      * Provides two points of the scanners bounding box and the number of points to sample in the X/Y directions.
      */
-    public void update(final Position corner1, final Position corner2, double resolution, Units units) {
+    public void update(final Position corner1, final Position corner2) {
         if (corner1.getUnits() != corner2.getUnits()) {
             throw new IllegalArgumentException("Provide same unit for both measures.");
         }
-        this.units = units;
-        
-        if (resolution == 0) return;
 
-        double minx = Math.min(corner1.x, corner2.x);
-        double maxx = Math.max(corner1.x, corner2.x);
-        double miny = Math.min(corner1.y, corner2.y);
-        double maxy = Math.max(corner1.y, corner2.y);
-        double minz = Math.min(corner1.z, corner2.z);
-        double maxz = Math.max(corner1.z, corner2.z);
+        double xMin = Math.min(corner1.x, corner2.x);
+        double xMax = Math.max(corner1.x, corner2.x);
+        double yMin = Math.min(corner1.y, corner2.y);
+        double yMax = Math.max(corner1.y, corner2.y);
+        double zMin = Math.min(corner1.z, corner2.z);
+        double zMax = Math.max(corner1.z, corner2.z);
 
-        Position newMin = new Position(minx, miny, minz, units);
-        Position newMax = new Position(maxx, maxy, maxz, units);
+        Position newMin = new Position(xMin, yMin, zMin, corner1.getUnits());
+        Position newMax = new Position(xMax, yMax, zMax, corner1.getUnits());
 
+        // If we're 0 in any dimension there is nothing we can do yet.
+        if (newMin.getX() != newMax.getX() && newMin.getY() != newMax.getY() && newMin.getZ() != newMax.getZ()) {
+            this.minXYZ = newMin;
+            this.maxXYZ = newMax;
+        }
 
-        this.minXYZ = newMin;
-        this.maxXYZ = newMax;
-        this.probeDistance = minz - maxz;
-        this.resolution = resolution;
+        reset();
+    }
 
-        this.xAxisPoints = (int) (Math.ceil((maxx - minx) / resolution)) + 1;
-        this.yAxisPoints = (int) (Math.ceil((maxy - miny) / resolution)) + 1;
-        this.probePositionGrid = new Position[this.xAxisPoints][this.yAxisPoints];
+    public void handleEvent(ProbeEvent evt) {
+        if (pendingPositions.isEmpty() || !isScanning.get()) return;
+
+        Position probeMachinePosition = evt.getProbePosition();
+        if (!Double.isFinite(probeMachinePosition.getZ())) {
+            reset();
+            throw new RuntimeException("Probe returned invalid position");
+        }
+
+        if (probeMachinePosition.getUnits() == Units.UNKNOWN) {
+            logger.warning("Unknown units in autoleveler receiving probe. Assuming " + getPreferredUnits());
+        }
+        probeMachinePosition = probeMachinePosition.getPositionIn(getPreferredUnits());
+        Position probePosition = probeMachinePosition.add(machineWorkOffset);
+
+        logger.log(Level.INFO, "Record ({0}, {1}, {2})",
+                new Object[]{probePosition.getX(), probePosition.getY(), probePosition.getZ()});
+        probeEvent(probePosition);
+
+        if (pendingPositions.isEmpty()) {
+            // The probing is done!
+            moveToSafeStartPoint(probePosition);
+        } else {
+            double retractedZ = retract(probePosition.getZ());
+            probeNextPoint(retractedZ);
+        }
+}
+
+    private Units getPreferredUnits() {
+        return this.backend.getSettings().getPreferredUnits();
+    }
+
+    public void reset() {
+        isScanning.set(false);
+        double resolution = settings.getStepResolution();
+
+        int xAxisPoints = (int) (Math.ceil((maxXYZ.getX() - minXYZ.getX()) / resolution)) + 1;
+        int yAxisPoints = (int) (Math.ceil((maxXYZ.getY() - minXYZ.getY()) / resolution)) + 1;
+        this.probePositionGrid = new Position[xAxisPoints][yAxisPoints];
 
         // Calculate probe locations.
-        ImmutableList.Builder<Position> probePositionBuilder = ImmutableList.builder();
-        for (int x = 0; x < this.xAxisPoints; x++) {
-            for (int y = 0; y < this.yAxisPoints; y++) {
+        for (int x = 0; x < xAxisPoints; x++) {
+            for (int y = 0; y < yAxisPoints; y++) {
                 Position p = new Position(
-                        minx + Math.min(maxx-minx, x*resolution),
-                        miny + Math.min(maxy-miny, y*resolution),
-                        maxz,
-                        units);
-                probePositionBuilder.add(p);
+                        minXYZ.getX() + Math.min(maxXYZ.getX() - minXYZ.getX(), x * resolution),
+                        minXYZ.getY() + Math.min(maxXYZ.getY() - minXYZ.getY(), y * resolution),
+                        Double.NaN,
+                        minXYZ.getUnits());
+                probePositionGrid[x][y] = p;
             }
         }
 
-        this.probePositions = probePositionBuilder.build();
-    }
-    
-    
-    
-    public boolean isCollectedAllProbe(){
-        return scanningSurface;
-    }
-    
+        // Move along grid in zigzag pattern
+        int yIncrement = 1;
+        int yIndex = 0;
+        pendingPositions = new LinkedList<>();
+        for (Position[] columnPositions : probePositionGrid) {
+            while (yIndex >= 0 && yIndex < columnPositions.length) {
+                Position p = columnPositions[yIndex];
+                pendingPositions.add(p);
+                yIndex += yIncrement;
+            }
+            yIncrement = -yIncrement;
+            yIndex += yIncrement;
+        }
 
-    public void enableCollectProbe(Position work, Position machine){
-        probeOffset.x = (-1 * machine.x) + work.x;
-        probeOffset.y = (-1 * machine.y) + work.y;
-        probeOffset.z = (-1 * machine.z) + work.z;
-        countProbe = 0;
-        scanningSurface = true;
+        listeners.forEach(SurfaceScannerListener::onScannerUpdate);
     }
 
-    public void enableTestProbe(){
-        probeOffset.x = 0;
-        probeOffset.y = 0;
-        probeOffset.z = 0;
-        countProbe = 0;
+    public void probeEvent(final Position p) {
+        Position expectedProbePosition = pendingPositions.pop();
+        Position probedPosition = p.getPositionIn(expectedProbePosition.getUnits());
+
+        // The position reported from the controller might lack some precision on the X/Y position.
+        // We therefore need to lower the precision when checking the probed X/Y axes
+        double delta = 0.1;
+        if (!isEqual(probedPosition.getX(), expectedProbePosition.getX(), delta) || !isEqual(probedPosition.getY(), expectedProbePosition.getY(), delta)) {
+            reset();
+            throw new RuntimeException(String.format("Unexpected probe location, expected %s to be %s", probedPosition, expectedProbePosition));
+        }
+        Position settingsOffset = settings.getAutoLevelProbeOffset().getPositionIn(getPreferredUnits());
+
+        expectedProbePosition.setX(expectedProbePosition.getX() + settingsOffset.getX());
+        expectedProbePosition.setY(expectedProbePosition.getY() + settingsOffset.getY());
+        expectedProbePosition.setZ(probedPosition.getZ() + settingsOffset.getZ());
+        listeners.forEach(SurfaceScannerListener::onScannerUpdate);
     }
-    
-    public ImmutableCollection<Position> getProbeStartPositions() {
-        return this.probePositions;
+
+    /**
+     * Begin a scan the surface {@link #handleEvent(ProbeEvent)} must be called to properly progress through the scan.
+     */
+    public void scan() {
+        isScanning.set(true);
+        Position work = backend.getWorkPosition();
+        Position machine = backend.getMachinePosition();
+        machineWorkOffset = new Position(work.getUnits());
+        machineWorkOffset.x = work.x - machine.x;
+        machineWorkOffset.y = work.y - machine.y;
+        machineWorkOffset.z = work.z - machine.z;
+
+        moveToSafeStartPoint(work);
+        probeNextPoint(maxXYZ.getZ());
+    }
+
+    private void moveToSafeStartPoint(Position currentPosition) {
+        try {
+            // Move up if below probe area
+            double safetyHeight = (UnitUtils.scaleUnits(Units.MM, maxXYZ.getUnits()) * backend.getSettings().getSafetyHeight()) + maxXYZ.getZ();
+            if (currentPosition.getPositionIn(maxXYZ.getUnits()).getZ() < safetyHeight) {
+                PartialPosition safeHeightPos = PartialPosition.builder(maxXYZ.getUnits()).setZ(safetyHeight).build();
+                String cmd = GcodeUtils.generateMoveCommand(
+                        "G90G0", getProbeScanFeedRate(), safeHeightPos);
+                logger.log(Level.INFO, "Move up to safe height {0}", new Object[]{safeHeightPos});
+                backend.sendGcodeCommand(true, cmd);
+            }
+
+            // Move to the XY start position
+            PartialPosition startPos = PartialPosition.builder(minXYZ).clearZ().build();
+            String cmd = GcodeUtils.generateMoveCommand(
+                    "G90G0", getProbeScanFeedRate(), startPos);
+            logger.log(Level.INFO, "Move to start position {0}", new Object[]{startPos});
+            backend.sendGcodeCommand(true, cmd);
+
+            // Move to the Y start position
+            PartialPosition startHeight = PartialPosition.builder(maxXYZ.getUnits()).setZ(maxXYZ.getZ()).build();
+            cmd = GcodeUtils.generateMoveCommand(
+                    "G90G0", getProbeScanFeedRate(), startHeight);
+            logger.log(Level.INFO, "Move to start height {0}", new Object[]{startHeight});
+            backend.sendGcodeCommand(true, cmd);
+        } catch (Exception e) {
+            reset();
+            throw new RuntimeException(e);
+        }
+    }
+
+    public Optional<Position> getNextProbePoint() {
+        return Optional.ofNullable(this.pendingPositions.peek());
+    }
+
+    private void probeNextPoint(Double zBackoff) {
+        try {
+            Position p = this.pendingPositions.peek();
+
+            // Position over next probe position
+            PartialPosition startPos = PartialPosition.builder(p).clearZ().build();
+            String cmd = GcodeUtils.generateMoveCommand(
+                    "G90G0", getProbeScanFeedRate(), startPos);
+            logger.log(Level.INFO, "MoveTo {0} {1}", new Object[]{startPos, cmd});
+            backend.sendGcodeCommand(true, cmd);
+
+            // Send probe command, probing down to zMin
+            double probeDistance = minXYZ.getZ() - zBackoff;
+            logger.log(Level.INFO, "Probe {0}", probeDistance);
+            backend.probe("Z", getProbeSpeed(), probeDistance, getPreferredUnits());
+        } catch (Exception e) {
+            reset();
+            throw new RuntimeException(e);
+        }
+    }
+
+    private double getProbeSpeed() {
+        return settings.getProbeSpeed() * UnitUtils.scaleUnits(Units.MM, getPreferredUnits());
+    }
+
+    private double getProbeScanFeedRate() {
+        return settings.getProbeScanFeedRate() * UnitUtils.scaleUnits(Units.MM, getPreferredUnits());
+    }
+
+    private double retract(Double zLast) {
+        double zRetract = settings.getZRetract() * maxXYZ.getZ();
+        if (zRetract <= 0) {
+            zRetract = maxXYZ.getZ() - minXYZ.getZ();
+        }
+
+        // Start by backing off the current position
+        double zBackoff = Math.min(zLast + zRetract, maxXYZ.getZ());
+        PartialPosition safeZ = PartialPosition.builder(maxXYZ.getUnits()).setZ(zBackoff).build();
+        String retractCommand = GcodeUtils.generateMoveCommand(
+                "G90G0",
+                getProbeScanFeedRate(),
+                safeZ);
+
+        try {
+            logger.log(Level.INFO, "Retract to {0} {1}", new Object[]{safeZ, retractCommand});
+            backend.sendGcodeCommand(true, retractCommand);
+        } catch (Exception e) {
+            reset();
+            throw new RuntimeException(e);
+        }
+        return zBackoff;
+    }
+
+    public void scanRandomData() {
+        machineWorkOffset.x = 0;
+        machineWorkOffset.y = 0;
+        machineWorkOffset.z = 0;
+
+        // Generate some random test data.
+        while (!pendingPositions.isEmpty()) {
+            Position p = new Position(pendingPositions.peek());
+            p.setZ(ThreadLocalRandom.current().nextDouble(minXYZ.getZ(), maxXYZ.getZ()));
+            probeEvent(p);
+        }
+
+        listeners.forEach(SurfaceScannerListener::onScannerUpdate);
+    }
+
+    public ImmutableList<Position> getProbeStartPositions() {
+        ImmutableList.Builder<Position> builder = ImmutableList.builder();
+        double z = maxXYZ.getZ();
+        for (Position[] columns : probePositionGrid) {
+            for (Position p : columns) {
+                Position zMaxPoint = new Position(p);
+                zMaxPoint.setZ(z);
+                builder.add(zMaxPoint);
+            }
+        }
+        return builder.build();
     }
 
     public final Position[][] getProbePositionGrid() {
         return this.probePositionGrid;
     }
 
-    public double getProbeDistance() {
-        return this.probeDistance;
+    public boolean isValid() {
+        return probePositionGrid.length > 0 && pendingPositions.isEmpty();
     }
 
-    public int getXAxisPoints() {
-        return this.xAxisPoints;
-    }
-
-    public int getYAxisPoints() {
-        return this.yAxisPoints;
-    }
-
-    public final Position getMaxXYZ() {
-        return this.maxXYZ;
-    }
-
-    public final Position getMinXYZ() {
-        return this.minXYZ;
-    }
-
-    public final Units getUnits() {
-        return units;
+    public void addListener(SurfaceScannerListener listener) {
+        listeners.add(listener);
     }
 }

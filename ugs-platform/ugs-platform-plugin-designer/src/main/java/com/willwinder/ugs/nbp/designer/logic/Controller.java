@@ -85,6 +85,7 @@ public class Controller {
     }
 
     public void newDrawing() {
+        undoManager.clear();
         drawing.clear();
         notifyListeners(ControllerEventType.NEW_DRAWING);
     }
@@ -112,7 +113,6 @@ public class Controller {
     public void setDesign(Design design) {
         newDrawing();
         getDrawing().insertEntities(design.getEntities());
-        settings.applySettings(design.getSettings());
         getDrawing().repaint();
         setTool(Tool.SELECT);
     }

@@ -33,4 +33,9 @@ public interface JoystickServiceListener {
      * @param state the current state of the joystick.
      */
     void onUpdate(JoystickState state);
+
+    /**
+     * When a controller has been changed
+     */
+    void onControllerChanged();
 }

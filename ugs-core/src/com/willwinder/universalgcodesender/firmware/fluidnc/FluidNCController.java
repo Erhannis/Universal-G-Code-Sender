@@ -1,5 +1,5 @@
 /*
-    Copyright 2022-2023 Will Winder
+    Copyright 2022-2024 Will Winder
 
     This file is part of Universal Gcode Sender (UGS).
 
@@ -20,11 +20,14 @@ package com.willwinder.universalgcodesender.firmware.fluidnc;
 
 import com.willwinder.universalgcodesender.Capabilities;
 import com.willwinder.universalgcodesender.ConnectionWatchTimer;
+import com.willwinder.universalgcodesender.ControllerException;
 import com.willwinder.universalgcodesender.GrblCapabilitiesConstants;
 import com.willwinder.universalgcodesender.GrblUtils;
 import com.willwinder.universalgcodesender.IController;
 import com.willwinder.universalgcodesender.IFileService;
 import com.willwinder.universalgcodesender.StatusPollTimer;
+import com.willwinder.universalgcodesender.Utils;
+import static com.willwinder.universalgcodesender.Utils.formatter;
 import com.willwinder.universalgcodesender.communicator.GrblCommunicator;
 import com.willwinder.universalgcodesender.communicator.ICommunicator;
 import com.willwinder.universalgcodesender.communicator.ICommunicatorListener;
@@ -32,6 +35,10 @@ import com.willwinder.universalgcodesender.connection.ConnectionDriver;
 import com.willwinder.universalgcodesender.connection.ConnectionException;
 import com.willwinder.universalgcodesender.firmware.FirmwareSettingsException;
 import com.willwinder.universalgcodesender.firmware.IFirmwareSettings;
+import com.willwinder.universalgcodesender.firmware.IOverrideManager;
+import static com.willwinder.universalgcodesender.firmware.fluidnc.FluidNCUtils.DISABLE_ECHO_COMMAND;
+import static com.willwinder.universalgcodesender.firmware.fluidnc.FluidNCUtils.GRBL_COMPABILITY_VERSION;
+import com.willwinder.universalgcodesender.firmware.fluidnc.commands.DetectEchoCommand;
 import com.willwinder.universalgcodesender.firmware.fluidnc.commands.FluidNCCommand;
 import com.willwinder.universalgcodesender.firmware.fluidnc.commands.GetAlarmCodesCommand;
 import com.willwinder.universalgcodesender.firmware.fluidnc.commands.GetErrorCodesCommand;
@@ -40,6 +47,7 @@ import com.willwinder.universalgcodesender.firmware.fluidnc.commands.GetParserSt
 import com.willwinder.universalgcodesender.firmware.fluidnc.commands.GetStartupMessagesCommand;
 import com.willwinder.universalgcodesender.firmware.fluidnc.commands.GetStatusCommand;
 import com.willwinder.universalgcodesender.firmware.fluidnc.commands.SystemCommand;
+import com.willwinder.universalgcodesender.firmware.grbl.GrblOverrideManager;
 import com.willwinder.universalgcodesender.gcode.GcodeParser;
 import com.willwinder.universalgcodesender.gcode.GcodeState;
 import com.willwinder.universalgcodesender.gcode.ICommandCreator;
@@ -51,13 +59,16 @@ import com.willwinder.universalgcodesender.listeners.ControllerStatusBuilder;
 import com.willwinder.universalgcodesender.listeners.MessageType;
 import com.willwinder.universalgcodesender.model.Axis;
 import com.willwinder.universalgcodesender.model.CommunicatorState;
-import com.willwinder.universalgcodesender.model.Overrides;
 import com.willwinder.universalgcodesender.model.PartialPosition;
 import com.willwinder.universalgcodesender.model.Position;
 import com.willwinder.universalgcodesender.model.UnitUtils;
+import static com.willwinder.universalgcodesender.model.UnitUtils.Units.MM;
+import static com.willwinder.universalgcodesender.model.UnitUtils.scaleUnits;
 import com.willwinder.universalgcodesender.services.MessageService;
+import com.willwinder.universalgcodesender.types.CommandException;
 import com.willwinder.universalgcodesender.types.GcodeCommand;
 import com.willwinder.universalgcodesender.utils.ControllerUtils;
+import static com.willwinder.universalgcodesender.utils.ControllerUtils.sendAndWaitForCompletion;
 import com.willwinder.universalgcodesender.utils.IGcodeStreamReader;
 import com.willwinder.universalgcodesender.utils.SemanticVersion;
 import com.willwinder.universalgcodesender.utils.ThreadHelper;
@@ -72,12 +83,6 @@ import java.util.concurrent.BlockingDeque;
 import java.util.concurrent.LinkedBlockingDeque;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-
-import static com.willwinder.universalgcodesender.Utils.formatter;
-import static com.willwinder.universalgcodesender.firmware.fluidnc.FluidNCUtils.GRBL_COMPABILITY_VERSION;
-import static com.willwinder.universalgcodesender.model.UnitUtils.Units.MM;
-import static com.willwinder.universalgcodesender.model.UnitUtils.scaleUnits;
-import static com.willwinder.universalgcodesender.utils.ControllerUtils.sendAndWaitForCompletion;
 
 /**
  * @author Joacim Breiler
@@ -97,6 +102,7 @@ public class FluidNCController implements IController, ICommunicatorListener {
     private final StopWatch streamStopWatch = new StopWatch();
     private final IFileService fileService;
     private final ICommandCreator commandCreator;
+    private final IOverrideManager overrideManager;
     private MessageService messageService = new MessageService();
     private ControllerStatus controllerStatus;
     private SemanticVersion semanticVersion = new SemanticVersion();
@@ -118,6 +124,7 @@ public class FluidNCController implements IController, ICommunicatorListener {
         this.communicator.addListener(this);
         this.fileService = new FluidNCFileService(this, positionPollTimer);
         this.commandCreator = new FluidNCCommandCreator();
+        this.overrideManager = new GrblOverrideManager(this, communicator, messageService);
     }
 
     @Override
@@ -193,7 +200,10 @@ public class FluidNCController implements IController, ICommunicatorListener {
 
     @Override
     public void openDoor() throws Exception {
-
+        if (isCommOpen()) {
+            pauseStreaming();
+            communicator.sendByteImmediately(GrblUtils.GRBL_DOOR_COMMAND);
+        }
     }
 
     @Override
@@ -299,15 +309,6 @@ public class FluidNCController implements IController, ICommunicatorListener {
     }
 
     @Override
-    public void sendOverrideCommand(Overrides command) throws Exception {
-        Byte realTimeCommand = GrblUtils.getOverrideForEnum(command, capabilities);
-        if (realTimeCommand != null) {
-            messageService.dispatchMessage(MessageType.INFO, String.format("> 0x%02x\n", realTimeCommand));
-            communicator.sendByteImmediately(realTimeCommand);
-        }
-    }
-
-    @Override
     public boolean getSingleStepMode() {
         return true;
     }
@@ -345,9 +346,9 @@ public class FluidNCController implements IController, ICommunicatorListener {
 
         isInitialized = false;
         positionPollTimer.stop();
-        communicator.connect(connectionDriver, port, portRate);
         setControllerState(ControllerState.CONNECTING);
         messageService.dispatchMessage(MessageType.INFO, "*** Connecting to " + connectionDriver.getProtocol() + port + ":" + portRate + "\n");
+        communicator.connect(connectionDriver, port, portRate);
 
         ThreadHelper.invokeLater(() -> {
             if (StringUtils.isEmpty(firmwareVariant) || semanticVersion == null) {
@@ -391,7 +392,7 @@ public class FluidNCController implements IController, ICommunicatorListener {
     }
 
     @Override
-    public Boolean isReadyToReceiveCommands() throws Exception {
+    public Boolean isReadyToReceiveCommands() {
         return isCommOpen() && !this.isStreaming();
     }
 
@@ -558,6 +559,7 @@ public class FluidNCController implements IController, ICommunicatorListener {
                 issueSoftReset();
                 return;
             }
+            disableEcho();
             queryFirmwareVersion();
             queryControllerInformation();
 
@@ -577,6 +579,14 @@ public class FluidNCController implements IController, ICommunicatorListener {
             } catch (Exception ex) {
                 // Never mind...
             }
+        }
+    }
+
+    private void disableEcho() throws Exception {
+        DetectEchoCommand detectEchoCommand = sendAndWaitForCompletion(this, new DetectEchoCommand());
+        if (detectEchoCommand.isEchoActivated()) {
+            LOGGER.log(Level.INFO, "Controller has echo activated, turning it off");
+            communicator.sendByteImmediately(DISABLE_ECHO_COMMAND);
         }
     }
 
@@ -615,13 +625,24 @@ public class FluidNCController implements IController, ICommunicatorListener {
         String state = getParserStateCommand.getState().orElseThrow(() -> new ConnectionException("Could not get controller state"));
         gcodeParser.addCommand(state);
 
+        sendAndWaitForCompletion(this, new SystemCommand("$verbose_errors=true"));
         refreshFirmwareSettings();
         FluidNCUtils.addCapabilities(capabilities, semanticVersion, firmwareSettings);
     }
 
     private void refreshFirmwareSettings() throws FirmwareSettingsException {
         messageService.dispatchMessage(MessageType.INFO, "*** Fetching device settings\n");
-        firmwareSettings.refresh();
+        try {
+            firmwareSettings.refresh();
+        } catch (FirmwareSettingsException e) {
+            messageService.dispatchMessage(MessageType.ERROR, "*** There was an error while fetching the configuration from the controller:\n");
+            messageService.dispatchMessage(MessageType.ERROR, e.getMessage() + "\"");
+            throw e;
+        }  catch (CommandException e) {
+            messageService.dispatchMessage(MessageType.ERROR, "*** There was an error while reading the configuration, see detailed error message below:\n");
+            messageService.dispatchMessage(MessageType.ERROR, e.getMessage() + "\"");
+            throw e;
+        }
     }
 
     @Override
@@ -636,7 +657,7 @@ public class FluidNCController implements IController, ICommunicatorListener {
     }
 
     @Override
-    public void sendCommandImmediately(GcodeCommand cmd) throws Exception {
+    public void sendCommandImmediately(GcodeCommand cmd) throws ControllerException {
         communicator.queueCommand(cmd);
         communicator.streamCommands();
     }
@@ -726,7 +747,6 @@ public class FluidNCController implements IController, ICommunicatorListener {
     public void rawResponseListener(String response) {
         if (GrblUtils.isGrblStatusString(response)) {
             getActiveCommand().filter(command -> command instanceof GetStatusCommand || command.getCommandString().contains("?")).ifPresent(command -> {
-                command.appendResponse(response);
                 activeCommands.removeFirst();
                 listeners.forEach(l -> l.commandComplete(command));
 
@@ -749,32 +769,22 @@ public class FluidNCController implements IController, ICommunicatorListener {
             messageService.dispatchMessage(MessageType.VERBOSE, response + "\n");
         } else if (getActiveCommand().isPresent()) {
             GcodeCommand command = getActiveCommand().get();
-            command.appendResponse(response);
+            if (command.isDone()) {
+                activeCommands.removeFirst();
+                updateParserModalState(command);
 
-            if (command instanceof FluidNCCommand) {
-                if (command.isDone()) {
-                    activeCommands.removeFirst();
-                    updateParserModalState(command);
+                listeners.forEach(l -> l.commandComplete(command));
 
-                    listeners.forEach(l -> l.commandComplete(command));
-
-                    if (command instanceof GetStatusCommand) {
-                        messageService.dispatchMessage(MessageType.VERBOSE, command.getResponse() + "\n");
-                    } else if (command instanceof SystemCommand) {
-                        messageService.dispatchMessage(MessageType.VERBOSE, command.getResponse() + "\n");
-                    } else {
-                        messageService.dispatchMessage(MessageType.INFO, command.getResponse() + "\n");
-                    }
-                }
-            } else {
-                if (response.startsWith("ok") || response.startsWith("error") || response.startsWith("alarm")) {
-                    command.setDone(true);
-
-                    activeCommands.removeFirst();
-                    listeners.forEach(l -> l.commandComplete(command));
+                if (command instanceof GetStatusCommand) {
+                    messageService.dispatchMessage(MessageType.VERBOSE, command.getResponse() + "\n");
+                } else if (command instanceof SystemCommand) {
+                    messageService.dispatchMessage(MessageType.VERBOSE, command.getResponse() + "\n");
+                } else {
                     messageService.dispatchMessage(MessageType.INFO, command.getResponse() + "\n");
                 }
             }
+
+            checkStreamFinished();
         } else if (FluidNCUtils.isWelcomeResponse(response)) {
             messageService.dispatchMessage(MessageType.VERBOSE, response + "\n");
             if (isInitialized) {
@@ -783,14 +793,7 @@ public class FluidNCController implements IController, ICommunicatorListener {
             }
 
             ThreadHelper.invokeLater(this::initializeController);
-        }
-
-        if (FluidNCUtils.isProbeMessage(response)) {
-            Position p = FluidNCUtils.parseProbePosition(response, getFirmwareSettings().getReportingUnits());
-            listeners.forEach(l -> l.probeCoordinates(p));
-        }
-
-        if (FluidNCUtils.isMessageResponse(response)) {
+        } else if (FluidNCUtils.isMessageResponse(response)) {
             MessageType messageType = MessageType.INFO;
             if (controllerStatus.getState() == ControllerState.CONNECTING) {
                 messageType = MessageType.VERBOSE;
@@ -799,6 +802,30 @@ public class FluidNCController implements IController, ICommunicatorListener {
         } else {
             messageService.dispatchMessage(MessageType.VERBOSE, "Other: " + response + "\n");
         }
+
+        if (FluidNCUtils.isProbeMessage(response)) {
+            Position p = FluidNCUtils.parseProbePosition(response, getFirmwareSettings().getReportingUnits());
+            listeners.forEach(l -> l.probeCoordinates(p));
+        }
+    }
+
+    private void checkStreamFinished() {
+        if (streamCommands != null &&
+                !communicator.areActiveCommands() &&
+                rowsRemaining() <= 0) {
+            fileStreamComplete();
+        }
+    }
+
+    private void fileStreamComplete() {
+        streamCommands = null;
+        String duration = Utils.formattedMillis(getSendDuration());
+        messageService.dispatchMessage(MessageType.INFO, String.format("%n**** Finished sending file in %s ****%n%n", duration));
+        if (streamStopWatch.isStarted()) {
+            streamStopWatch.stop();
+        }
+        ThreadHelper.invokeLater(() ->
+                listeners.forEach(ControllerListener::streamComplete));
     }
 
     @Override
@@ -835,6 +862,15 @@ public class FluidNCController implements IController, ICommunicatorListener {
     }
 
     @Override
+    public void onConnectionClosed() {
+        try {
+            closeCommPort();
+        } catch (Exception e) {
+            // Never mind
+        }
+    }
+
+    @Override
     public IFileService getFileService() {
         return fileService;
     }
@@ -842,5 +878,10 @@ public class FluidNCController implements IController, ICommunicatorListener {
     @Override
     public ICommandCreator getCommandCreator() {
         return commandCreator;
+    }
+
+    @Override
+    public IOverrideManager getOverrideManager() {
+        return overrideManager;
     }
 }

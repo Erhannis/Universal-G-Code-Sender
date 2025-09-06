@@ -20,9 +20,11 @@ package com.willwinder.ugs.nbp.designer.entities.cuttable;
 
 import com.willwinder.ugs.nbp.designer.entities.Entity;
 import com.willwinder.ugs.nbp.designer.entities.EntityGroup;
+import com.willwinder.ugs.nbp.designer.entities.EntitySetting;
 
+import java.util.ArrayList;
 import java.util.List;
-import java.util.stream.Collectors;
+import java.util.Optional;
 import java.util.stream.Stream;
 
 /**
@@ -31,9 +33,12 @@ import java.util.stream.Stream;
  * @author Joacim Breiler
  */
 public class Group extends EntityGroup implements Cuttable {
+    private final CuttableEntitySettings entitySettings;
+
 
     public Group() {
         setName("Group");
+        entitySettings = new CuttableEntitySettings(this);
     }
 
     @Override
@@ -42,7 +47,7 @@ public class Group extends EntityGroup implements Cuttable {
                 .map(Cuttable::getCutType)
                 .filter(cutType -> cutType != CutType.NONE)
                 .distinct()
-                .collect(Collectors.toList());
+                .toList();
 
         if (!cutTypes.isEmpty()) {
             return cutTypes.get(0);
@@ -54,8 +59,8 @@ public class Group extends EntityGroup implements Cuttable {
     @Override
     public void setCutType(CutType cutType) {
         getChildren().forEach(child -> {
-            if (child instanceof Cuttable) {
-                ((Cuttable) child).setCutType(cutType);
+            if (child instanceof Cuttable cuttable) {
+                cuttable.setCutType(cutType);
             }
         });
     }
@@ -71,8 +76,8 @@ public class Group extends EntityGroup implements Cuttable {
     @Override
     public void setTargetDepth(double cutDepth) {
         getChildren().forEach(child -> {
-            if (child instanceof Cuttable) {
-                ((Cuttable) child).setTargetDepth(cutDepth);
+            if (child instanceof Cuttable cuttable) {
+                cuttable.setTargetDepth(cutDepth);
             }
         });
     }
@@ -88,8 +93,59 @@ public class Group extends EntityGroup implements Cuttable {
     @Override
     public void setStartDepth(double startDepth) {
         getChildren().forEach(child -> {
-            if (child instanceof Cuttable) {
-                ((Cuttable) child).setStartDepth(startDepth);
+            if (child instanceof Cuttable cuttable) {
+                cuttable.setStartDepth(startDepth);
+            }
+        });
+    }
+
+    @Override
+    public int getSpindleSpeed() {
+        return getCuttableStream()
+                .mapToInt(Cuttable::getSpindleSpeed)
+                .max()
+                .orElse(0);
+    }
+
+    @Override
+    public void setSpindleSpeed(int spindleSpeed) {
+        getChildren().forEach(child -> {
+            if (child instanceof Cuttable cuttable) {
+                cuttable.setSpindleSpeed(spindleSpeed);
+            }
+        });
+    }
+
+    @Override
+    public int getFeedRate() {
+        return getCuttableStream()
+                .mapToInt(Cuttable::getFeedRate)
+                .max()
+                .orElse(0);
+    }
+
+    @Override
+    public void setFeedRate(int feedRate) {
+        getChildren().forEach(child -> {
+            if (child instanceof Cuttable cuttable) {
+                cuttable.setFeedRate(feedRate);
+            }
+        });
+    }
+
+    @Override
+    public int getPasses() {
+        return getCuttableStream()
+                .mapToInt(Cuttable::getPasses)
+                .max()
+                .orElse(0);
+    }
+
+    @Override
+    public void setPasses(int passes) {
+        getChildren().forEach(child -> {
+            if (child instanceof Cuttable cuttable) {
+                cuttable.setPasses(passes);
             }
         });
     }
@@ -102,6 +158,25 @@ public class Group extends EntityGroup implements Cuttable {
                 .orElse(false);
     }
 
+    @Override
+    public void setHidden(boolean hidden) {
+        getChildren().forEach(child -> {
+            if (child instanceof Cuttable cuttable) {
+                cuttable.setHidden(hidden);
+            }
+        });
+    }
+
+    @Override
+    public Optional<Object> getEntitySetting(EntitySetting entitySetting) {
+        return entitySettings.getEntitySetting(entitySetting);
+    }
+
+    @Override
+    public void setEntitySetting(EntitySetting entitySetting, Object value) {
+        entitySettings.setEntitySetting(entitySetting, value);
+    }
+
     private Stream<Cuttable> getCuttableStream() {
         return getChildren().stream()
                 .filter(Cuttable.class::isInstance)
@@ -109,19 +184,52 @@ public class Group extends EntityGroup implements Cuttable {
     }
 
     @Override
-    public void setHidden(boolean hidden) {
-        getChildren().forEach(child -> {
-            if (child instanceof Cuttable) {
-                ((Cuttable) child).setHidden(hidden);
-            }
-        });
-    }
-    @Override
     public Entity copy() {
         Group copy = new Group();
         super.copyPropertiesTo(copy);
         getChildren().stream().map(Entity::copy).forEach(copy::addChild);
         copy.setHidden(isHidden());
         return copy;
+    }
+
+    @Override
+    public List<EntitySetting> getSettings() {
+        List<List<EntitySetting>> list = getCuttableStream().map(Entity::getSettings).toList();
+        if (list.isEmpty()) {
+            return List.of();
+        }
+
+        List<EntitySetting> result = list.get(0);
+        for (List<EntitySetting> settings : list) {
+            result.retainAll(settings);
+        }
+
+        // Remove cut type if they are of differnt types
+        if (getCuttableStream().map(Cuttable::getCutType).distinct().toList().size() > 1) {
+            result = new ArrayList<>(result);
+            result.remove(EntitySetting.CUT_TYPE);
+        }
+
+        if (getCuttableStream().map(Cuttable::getStartDepth).distinct().toList().size() > 1) {
+            result = new ArrayList<>(result);
+            result.remove(EntitySetting.START_DEPTH);
+        }
+
+        if (getCuttableStream().map(Cuttable::getTargetDepth).distinct().toList().size() > 1) {
+            result = new ArrayList<>(result);
+            result.remove(EntitySetting.TARGET_DEPTH);
+        }
+
+        if (getCuttableStream().map(Cuttable::getSpindleSpeed).distinct().toList().size() > 1) {
+            result = new ArrayList<>(result);
+            result.remove(EntitySetting.SPINDLE_SPEED);
+        }
+
+        if (getCuttableStream().map(Cuttable::getFeedRate).distinct().toList().size() > 1) {
+            result = new ArrayList<>(result);
+            result.remove(EntitySetting.FEED_RATE);
+        }
+
+        return result;
     }
 }

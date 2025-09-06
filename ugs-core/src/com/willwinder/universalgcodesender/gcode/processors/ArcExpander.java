@@ -19,7 +19,6 @@
 package com.willwinder.universalgcodesender.gcode.processors;
 
 import com.google.common.collect.Iterables;
-import com.willwinder.universalgcodesender.gcode.GcodeParser;
 import com.willwinder.universalgcodesender.gcode.GcodeParser.GcodeMeta;
 import com.willwinder.universalgcodesender.gcode.GcodePreprocessorUtils;
 import com.willwinder.universalgcodesender.gcode.GcodePreprocessorUtils.SplitCommand;
@@ -45,9 +44,9 @@ import java.util.List;
  * @author wwinder
  */
 public class ArcExpander implements CommandProcessor {
-    final private boolean convertToLines;
-    final private double length;
-    final private DecimalFormat df;
+    private final boolean convertToLines;
+    private final double length;
+    private final DecimalFormat df;
 
     @Override
     public String getHelp() {
@@ -68,13 +67,23 @@ public class ArcExpander implements CommandProcessor {
         df = new DecimalFormat("#.#########", Localization.dfs);
     }
 
+    /**
+     * @param convertToLines toggles if smaller lines or arcs are returned.
+     * @param length the length of each smaller segment.
+     */
+    public ArcExpander(boolean convertToLines, double length, DecimalFormat df) {
+        this.convertToLines = convertToLines;
+        this.length = length;
+        this.df = df;
+    }
+
     @Override
     public List<String> processCommand(String command, GcodeState state) throws GcodeParserException {
         if (state.currentPoint == null) throw new GcodeParserException(Localization.getString("parser.processor.arc.start-error"));
 
         List<String> results = new ArrayList<>();
 
-        List<GcodeMeta> commands = GcodeParserUtils.processCommand(command, 0, state);
+        List<GcodeMeta> commands = GcodeParserUtils.processCommand(command, 0, state, true);
 
         // If this is not an arc, there is nothing to do.
         Code c = hasArcCommand(commands);
@@ -96,18 +105,18 @@ public class ArcExpander implements CommandProcessor {
                 start, end, ps.center(), ps.isClockwise(),
                 ps.getRadius(), 0, this.length, new PlaneFormatter(ps.getPlaneState()));
 
+        if (points.isEmpty()) {
+            return results;
+        }
+
         // That function returns the first and last points. Exclude the first
         // point because the previous gcode command ends there already.
         points.remove(0);
 
         if (convertToLines) {
-            // Tack the speed onto the first line segment in case the arc also
-            // changed the feed value.
-            String feed = "F" + arcMeta.point.getSpeed();
             for (Position point : points) {
-                results.add(GcodePreprocessorUtils.generateLineFromPoints(G1, start, point, state.inAbsoluteMode, df) + feed);
+                results.add(GcodePreprocessorUtils.generateLineFromPoints(G1, start, point, state.inAbsoluteMode, df));
                 start = point;
-                feed = "";
             }
         } else {
             // TODO: Generate arc segments.

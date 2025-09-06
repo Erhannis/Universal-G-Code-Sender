@@ -1,5 +1,5 @@
 /*
-    Copyright 2022 Will Winder
+    Copyright 2022-2023 Will Winder
 
     This file is part of Universal Gcode Sender (UGS).
 
@@ -18,12 +18,17 @@
  */
 package com.willwinder.ugs.nbp.designer.platform;
 
-import com.willwinder.ugs.nbp.designer.gui.SelectionSettingsPanel;
+import com.willwinder.ugs.nbp.designer.gui.selectionsettings.SelectionSettingsPanel;
 import com.willwinder.ugs.nbp.designer.logic.Controller;
 import com.willwinder.ugs.nbp.designer.logic.ControllerEventType;
 import com.willwinder.ugs.nbp.designer.logic.ControllerFactory;
 import com.willwinder.ugs.nbp.designer.logic.ControllerListener;
+import com.willwinder.ugs.nbp.lib.Mode;
 import org.openide.windows.TopComponent;
+
+import javax.swing.JScrollPane;
+import javax.swing.ScrollPaneConstants;
+import java.awt.BorderLayout;
 
 /**
  * @author Joacim Breiler
@@ -32,7 +37,7 @@ import org.openide.windows.TopComponent;
         preferredID = "SettingsTopComponent",
         persistenceType = TopComponent.PERSISTENCE_NEVER
 )
-@TopComponent.Registration(mode = "top_left", openAtStartup = false)
+@TopComponent.Registration(mode = Mode.LEFT_TOP, openAtStartup = false)
 public class SettingsTopComponent extends TopComponent implements ControllerListener {
     private static final long serialVersionUID = 324234398723987873L;
 
@@ -41,7 +46,7 @@ public class SettingsTopComponent extends TopComponent implements ControllerList
     public SettingsTopComponent() {
         setMinimumSize(new java.awt.Dimension(50, 50));
         setPreferredSize(new java.awt.Dimension(200, 200));
-        setLayout(new java.awt.BorderLayout());
+        setLayout(new BorderLayout());
         setDisplayName("Cut settings");
     }
 
@@ -61,7 +66,10 @@ public class SettingsTopComponent extends TopComponent implements ControllerList
         removeAll();
         Controller controller = ControllerFactory.getController();
         selectionSettingsPanel = new SelectionSettingsPanel(controller);
-        add(selectionSettingsPanel);
+        JScrollPane scrollPane = new JScrollPane(selectionSettingsPanel, ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED, ScrollPaneConstants.HORIZONTAL_SCROLLBAR_AS_NEEDED);
+        scrollPane.getVerticalScrollBar().setUnitIncrement(10);
+        scrollPane.getHorizontalScrollBar().setUnitIncrement(10);
+        add(scrollPane);
         controller.addListener(this);
     }
 

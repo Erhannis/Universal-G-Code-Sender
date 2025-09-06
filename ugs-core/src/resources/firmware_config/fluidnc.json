@@ -1,6 +1,6 @@
 {
     "Name": "FluidNC",
-    "Version": 1,
+    "Version": 3,
     "Controller": {
         "name": "FluidNC",
         "args": null

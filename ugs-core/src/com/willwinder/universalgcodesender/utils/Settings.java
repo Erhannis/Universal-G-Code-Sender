@@ -1,5 +1,5 @@
 /*
-    Copyright 2014-2021 Will Winder
+    Copyright 2014-2024 Will Winder
 
     This file is part of Universal Gcode Sender (UGS).
 
@@ -29,8 +29,20 @@ import org.apache.commons.lang3.StringUtils;
 
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.*;
 import java.util.logging.Logger;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Deque;
+import java.util.ArrayDeque;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
+import java.util.List;
+
+
 
 public class Settings {
     private static final Logger logger = Logger.getLogger(Settings.class.getName());
@@ -80,7 +92,7 @@ public class Settings {
     private boolean autoConnect = false;
     private boolean autoReconnect = false;
 
-    private AutoLevelSettings autoLevelSettings = new AutoLevelSettings();
+    private final AutoLevelSettings autoLevelSettings = new AutoLevelSettings();
 
     private FileStats fileStats = new FileStats();
 
@@ -113,6 +125,17 @@ public class Settings {
      * If the mouse zoom should be inverted
      */
     private boolean invertMouseZoom = false;
+
+    /**
+     * Should show an information dialog if the current language isn't
+     * fully translated
+     */
+    private boolean showTranslationsWarning = true;
+
+    /**
+     * The last working directory used by the file browser
+     */
+    private String lastWorkingDirectory = System.getProperty("user.home");
 
     /**
      * The GSON deserialization doesn't do anything beyond initialize what's in the json document.  Call finalizeInitialization() before using the Settings.
@@ -156,6 +179,9 @@ public class Settings {
      */
     public void setSettingChangeListener(SettingChangeListener listener) {
         this.listener = listener;
+        if (this.autoLevelSettings != null) {
+            autoLevelSettings.setSettingChangeListener(listener);
+        }
     }
 
     private void changed() {
@@ -449,7 +475,7 @@ public class Settings {
 
     public void setAutoLevelSettings(AutoLevelSettings settings) {
         if (! settings.equals(this.autoLevelSettings)) {
-            this.autoLevelSettings = settings;
+            this.autoLevelSettings.apply(settings);
             changed();
         }
     }
@@ -539,26 +565,20 @@ public class Settings {
         changed();
     }
 
-    public static class AutoLevelSettings {
-        // Setting window
-        public double autoLevelProbeZeroHeight = 0;
-        public Position autoLevelProbeOffset = new Position(0, 0, 0, Units.UNKNOWN);
-        public double autoLevelArcSliceLength = 0.01;
+    public boolean isShowTranslationsWarning() {
+        return showTranslationsWarning;
+    }
 
-        // Main window
-        public double stepResolution = 10;
-        public double probeSpeed = 10;
-        public double zSurface = 0;
+    public void setShowTranslationsWarning(boolean showTranslationsWarning) {
+        this.showTranslationsWarning = showTranslationsWarning;
+    }
 
-        public boolean equals(AutoLevelSettings obj) {
-            return
-                    this.autoLevelProbeZeroHeight == obj.autoLevelProbeZeroHeight &&
-                            Objects.equals(this.autoLevelProbeOffset, obj.autoLevelProbeOffset) &&
-                            this.autoLevelArcSliceLength == obj.autoLevelArcSliceLength &&
-                            this.stepResolution == obj.stepResolution &&
-                            this.probeSpeed == obj.probeSpeed &&
-                            this.zSurface == obj.zSurface;
-        }
+    public String getLastWorkingDirectory() {
+        return lastWorkingDirectory;
+    }
+
+    public void setLastWorkingDirectory(String lastWorkingDirectory) {
+        this.lastWorkingDirectory = lastWorkingDirectory;
     }
 
     public static class FileStats {

@@ -1,5 +1,5 @@
 /*
-    Copyright 2021 Will Winder
+    Copyright 2021-2024 Will Winder
 
     This file is part of Universal Gcode Sender (UGS).
 
@@ -21,10 +21,12 @@ package com.willwinder.ugs.nbp.designer.entities;
 import com.willwinder.ugs.nbp.designer.gui.Drawing;
 import com.willwinder.ugs.nbp.designer.model.Size;
 
-import java.awt.*;
+import java.awt.Graphics2D;
+import java.awt.Shape;
 import java.awt.geom.AffineTransform;
 import java.awt.geom.Point2D;
 import java.awt.geom.Rectangle2D;
+import java.util.List;
 
 /**
  * An entity is something that can be drawn in a {@link Drawing} which has a position, rotation and size.
@@ -93,6 +95,14 @@ public interface Entity {
     void setSize(Size size);
 
     /**
+     * Changes the size of the entity from the given anchor.
+     *
+     * @param anchor the anchor to keep
+     * @param size the new size
+     */
+    void setSize(Anchor anchor, Size size);
+
+    /**
      * Gets the bounds of the entity with the position and size in real space
      *
      * @return the bounds in real space
@@ -107,14 +117,6 @@ public interface Entity {
     Point2D getPosition();
 
     /**
-     * Returns the real position of the entity at the given anchor
-     *
-     * @param anchor
-     * @return the real position at the anchor
-     */
-    Point2D getPosition(Anchor anchor);
-
-    /**
      * Sets the real position of the entity
      *
      * @param position the new position
@@ -122,9 +124,17 @@ public interface Entity {
     void setPosition(Point2D position);
 
     /**
+     * Returns the real position of the entity at the given anchor
+     *
+     * @param anchor the anchor point to get the position for
+     * @return the real position at the anchor
+     */
+    Point2D getPosition(Anchor anchor);
+
+    /**
      * Sets the real position of the entity at the given anchor
      *
-     * @param anchor the anchor to set the position of
+     * @param anchor   the anchor to set the position of
      * @param position the new position
      */
     void setPosition(Anchor anchor, Point2D position);
@@ -170,6 +180,13 @@ public interface Entity {
     double getRotation();
 
     /**
+     * Sets the rotation of the object in degrees
+     *
+     * @param rotation the rotation in degrees
+     */
+    void setRotation(double rotation);
+
+    /**
      * Rotate the object around its center point in the given degrees
      *
      * @param angle the angle in degrees
@@ -183,13 +200,6 @@ public interface Entity {
      * @param angle  the angle in degrees to rotate
      */
     void rotate(Point2D center, double angle);
-
-    /**
-     * Sets the rotation of the object in degrees
-     *
-     * @param rotation the rotation in degrees
-     */
-    void setRotation(double rotation);
 
     /**
      * Gets the center point of this object using its real bounds
@@ -243,6 +253,13 @@ public interface Entity {
     Entity copy();
 
     /**
+     * Returns an optional description
+     *
+     * @return the description or null
+     */
+    String getDescription();
+
+    /**
      * An optional description
      *
      * @param description
@@ -250,9 +267,23 @@ public interface Entity {
     void setDescription(String description);
 
     /**
-     * Returns an optional description
+     * Get the first point in the shape
      *
-     * @return the description or null
+     * @return the point in the shape
      */
-    String getDescription();
+    Point2D getFirstPoint();
+
+    /**
+     * Get the last point in the shape
+     *
+     * @return the point in the shape
+     */
+    Point2D getLastPoint();
+
+    /**
+     * Return a list of possible settings for this entity
+     *
+     * @return a list of settings
+     */
+    List<EntitySetting> getSettings();
 }

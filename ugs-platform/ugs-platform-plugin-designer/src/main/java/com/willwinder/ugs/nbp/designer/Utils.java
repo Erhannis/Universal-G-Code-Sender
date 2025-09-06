@@ -29,6 +29,8 @@ import static com.willwinder.ugs.nbp.designer.DesignerMain.PROPERTY_IS_STANDALON
  * @author Joacim Breiler
  */
 public class Utils {
+    public static final int MAX_DECIMALS = 4;
+
     private Utils() {
     }
 

@@ -27,6 +27,7 @@ import com.willwinder.universalgcodesender.model.BackendAPI;
 import com.willwinder.universalgcodesender.model.events.ControllerStateEvent;
 import com.willwinder.universalgcodesender.model.events.SettingChangedEvent;
 import com.willwinder.universalgcodesender.utils.FirmwareUtils;
+import com.willwinder.universalgcodesender.utils.ThreadHelper;
 import static com.willwinder.universalgcodesender.utils.GUIHelpers.displayErrorDialog;
 import org.openide.awt.ActionID;
 import org.openide.awt.ActionReference;
@@ -35,8 +36,7 @@ import org.openide.awt.ActionRegistration;
 import org.openide.util.ImageUtilities;
 
 import java.awt.*;
-import static javax.swing.Action.NAME;
-import static javax.swing.Action.SMALL_ICON;
+import java.util.logging.Logger;
 import javax.swing.JComboBox;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
@@ -56,6 +56,7 @@ import org.openide.util.actions.CallableSystemAction;
                 path = "Toolbars/Connection",
                 position = 980)})
 public class FirmwareAction extends CallableSystemAction implements UGSEventListener {
+    private static final Logger LOGGER = Logger.getLogger(FirmwareAction.class.getSimpleName());
     public static final String ICON_BASE = "resources/icons/firmware.svg";
 
     private final BackendAPI backend;
@@ -76,7 +77,10 @@ public class FirmwareAction extends CallableSystemAction implements UGSEventList
     }
 
     private void firmwareUpdated() {
-        firmwareCombo.setSelectedItem( backend.getSettings().getFirmwareVersion());
+        if (!backend.getSettings().getFirmwareVersion().equals(firmwareCombo.getSelectedItem())) {
+            LOGGER.info("Changed to firmware " + backend.getSettings().getFirmwareVersion());
+            firmwareCombo.setSelectedItem(backend.getSettings().getFirmwareVersion());
+        }
     }
 
     @Override
@@ -98,10 +102,12 @@ public class FirmwareAction extends CallableSystemAction implements UGSEventList
             panel.add(firmwareCombo);
             c = panel;
 
-            // Baud rate options.
-            loadFirmwareSelector();
-
-            firmwareCombo.addActionListener(a -> setFirmware());
+            // Load firmware configuration in its own thread to make sure that
+            // the splash screen is not covering any firmware upgrade dialogs
+            ThreadHelper.invokeLater(() -> {
+                loadFirmwareSelector();
+                firmwareCombo.addActionListener(a -> setFirmware());
+            });
         }
         return c;
     }

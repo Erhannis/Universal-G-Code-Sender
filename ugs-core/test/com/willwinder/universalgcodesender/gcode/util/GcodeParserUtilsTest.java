@@ -3,19 +3,19 @@ package com.willwinder.universalgcodesender.gcode.util;
 import com.google.common.collect.Iterables;
 import com.willwinder.universalgcodesender.gcode.GcodeParser;
 import com.willwinder.universalgcodesender.gcode.GcodeState;
+import static com.willwinder.universalgcodesender.gcode.util.Code.G0;
+import static com.willwinder.universalgcodesender.gcode.util.Code.G1;
+import static com.willwinder.universalgcodesender.gcode.util.Code.G3;
+import static com.willwinder.universalgcodesender.gcode.util.Code.G38_2;
 import com.willwinder.universalgcodesender.i18n.Localization;
 import com.willwinder.universalgcodesender.model.Position;
+import static com.willwinder.universalgcodesender.model.UnitUtils.Units.MM;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import org.junit.Assert;
 import org.junit.Test;
 
 import java.util.List;
-
-import static com.willwinder.universalgcodesender.gcode.util.Code.G0;
-import static com.willwinder.universalgcodesender.gcode.util.Code.G1;
-import static com.willwinder.universalgcodesender.gcode.util.Code.G3;
-import static com.willwinder.universalgcodesender.model.UnitUtils.Units.MM;
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 public class GcodeParserUtilsTest {
     @Test
@@ -36,10 +36,11 @@ public class GcodeParserUtilsTest {
     }
 
     @Test
-    public void missingAxisWords() {
-        assertThatThrownBy(() -> GcodeParserUtils.processCommand("G38.2", 0, new GcodeState()))
-                .isInstanceOf(GcodeParserException.class)
-                .hasMessage(Localization.getString("parser.gcode.missing-axis-commands") + ": G38.2");
+    public void missingAxisWords() throws GcodeParserException {
+        List<GcodeParser.GcodeMeta> metaList = GcodeParserUtils.processCommand("G38.2", 0, new GcodeState());
+        GcodeParser.GcodeMeta meta = Iterables.getOnlyElement(metaList);
+        assertThat(meta.code).isEqualTo(G38_2);
+        assertThat(meta.state.currentPoint).isEqualTo(new Position(Double.NaN, Double.NaN, Double.NaN, MM));
     }
 
     @Test
@@ -91,7 +92,7 @@ public class GcodeParserUtilsTest {
         List<GcodeParser.GcodeMeta> metaList = GcodeParserUtils.processCommand("G3", 0, new GcodeState());
         GcodeParser.GcodeMeta meta = Iterables.getOnlyElement(metaList);
         assertThat(meta.code).isEqualTo(G3);
-        assertThat(meta.state.currentPoint).isEqualTo(new Position(0, 0, 0, MM));
+        assertThat(meta.state.currentPoint).isEqualTo(new Position(Double.NaN, Double.NaN, Double.NaN, MM));
     }
 
     @Test
@@ -115,14 +116,14 @@ public class GcodeParserUtilsTest {
     public void fWordOnly() throws Exception {
         List<GcodeParser.GcodeMeta> metaList = GcodeParserUtils.processCommand("F100", 0, new GcodeState(), true);
         GcodeParser.GcodeMeta meta = Iterables.getOnlyElement(metaList);
-        assertThat(meta.state.speed).isEqualTo(100.0);
+        assertThat(meta.state.feedRate).isEqualTo(100.0);
     }
 
     @Test
     public void fWordFromJogCommandShouldNotBeParsed() throws Exception {
         List<GcodeParser.GcodeMeta> metaList = GcodeParserUtils.processCommand("$J=G21G91X10F99", 0, new GcodeState(), true);
         GcodeParser.GcodeMeta meta = Iterables.getOnlyElement(metaList);
-        assertThat(meta.state.speed).isEqualTo(0.0);
+        assertThat(meta.state.feedRate).isEqualTo(0.0);
     }
 
     @Test

@@ -1,5 +1,5 @@
 /*
-    Copyright 2021 Will Winder
+    Copyright 2021-2024 Will Winder
 
     This file is part of Universal Gcode Sender (UGS).
 
@@ -20,6 +20,7 @@ package com.willwinder.ugs.nbp.designer.entities.cuttable;
 
 import com.willwinder.ugs.nbp.designer.entities.AbstractEntity;
 import com.willwinder.ugs.nbp.designer.entities.EntityEvent;
+import com.willwinder.ugs.nbp.designer.entities.EntitySetting;
 import com.willwinder.ugs.nbp.designer.entities.EventType;
 import com.willwinder.ugs.nbp.designer.gui.Colors;
 import com.willwinder.ugs.nbp.designer.gui.Drawing;
@@ -32,14 +33,21 @@ import java.awt.Graphics2D;
 import java.awt.Shape;
 import java.awt.geom.Line2D;
 import java.awt.geom.Rectangle2D;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Optional;
 
 /**
  * @author Joacim Breiler
  */
 public abstract class AbstractCuttable extends AbstractEntity implements Cuttable {
+    private final CuttableEntitySettings entitySettings;
     private CutType cutType = CutType.NONE;
     private double targetDepth;
     private double startDepth;
+    private int spindleSpeed;
+    private int passes;
+    private int feedRate;
     private boolean isHidden = false;
 
     protected AbstractCuttable() {
@@ -48,6 +56,7 @@ public abstract class AbstractCuttable extends AbstractEntity implements Cuttabl
 
     protected AbstractCuttable(double relativeX, double relativeY) {
         super(relativeX, relativeY);
+        entitySettings = new CuttableEntitySettings(this);
     }
 
     @Override
@@ -58,6 +67,7 @@ public abstract class AbstractCuttable extends AbstractEntity implements Cuttabl
     @Override
     public void setCutType(CutType cutType) {
         this.cutType = cutType;
+        notifyEvent(new EntityEvent(this, EventType.SETTINGS_CHANGED));
     }
 
     @Override
@@ -68,6 +78,7 @@ public abstract class AbstractCuttable extends AbstractEntity implements Cuttabl
     @Override
     public void setStartDepth(double startDepth) {
         this.startDepth = Math.abs(startDepth);
+        notifyEvent(new EntityEvent(this, EventType.SETTINGS_CHANGED));
     }
 
     @Override
@@ -78,6 +89,40 @@ public abstract class AbstractCuttable extends AbstractEntity implements Cuttabl
     @Override
     public void setTargetDepth(double targetDepth) {
         this.targetDepth = Math.abs(targetDepth);
+        notifyEvent(new EntityEvent(this, EventType.SETTINGS_CHANGED));
+    }
+
+    @Override
+    public int getSpindleSpeed() {
+        return spindleSpeed;
+    }
+
+    @Override
+    public void setSpindleSpeed(int speed) {
+        this.spindleSpeed = Math.abs(speed);
+        notifyEvent(new EntityEvent(this, EventType.SETTINGS_CHANGED));
+    }
+
+    @Override
+    public int getPasses() {
+        return passes;
+    }
+
+    @Override
+    public void setPasses(int passes) {
+        this.passes = Math.abs(passes);
+        notifyEvent(new EntityEvent(this, EventType.SETTINGS_CHANGED));
+    }
+
+    @Override
+    public int getFeedRate() {
+        return feedRate;
+    }
+
+    @Override
+    public void setFeedRate(int feedRate) {
+        this.feedRate = Math.abs(feedRate);
+        notifyEvent(new EntityEvent(this, EventType.SETTINGS_CHANGED));
     }
 
     @Override
@@ -91,7 +136,7 @@ public abstract class AbstractCuttable extends AbstractEntity implements Cuttabl
         BasicStroke dashedStroke = new BasicStroke(strokeWidth, BasicStroke.CAP_BUTT, BasicStroke.JOIN_MITER, 1, new float[]{dashWidth, dashWidth}, 0);
 
         Shape shape = getShape();
-        if (getCutType() != CutType.NONE && getTargetDepth() == 0) {
+        if (getCutType() == CutType.NONE) {
             drawShape(graphics, dashedStroke, Colors.SHAPE_HINT, shape);
         } else if (getCutType() == CutType.POCKET) {
             graphics.setStroke(new BasicStroke(strokeWidth));
@@ -100,6 +145,13 @@ public abstract class AbstractCuttable extends AbstractEntity implements Cuttabl
             graphics.draw(shape);
         } else if (getCutType() == CutType.INSIDE_PATH || getCutType() == CutType.ON_PATH || getCutType() == CutType.OUTSIDE_PATH) {
             drawShape(graphics, new BasicStroke(strokeWidth), getCutColor(), shape);
+        } else if (getCutType() == CutType.LASER_ON_PATH) {
+            drawShape(graphics, new BasicStroke(strokeWidth), getLaserCutColor(), shape);
+        } else if (getCutType() == CutType.LASER_FILL) {
+            graphics.setStroke(new BasicStroke(strokeWidth));
+            graphics.setColor(getLaserCutColor());
+            graphics.fill(shape);
+            graphics.draw(shape);
         } else if (getCutType() == CutType.CENTER_DRILL) {
             drawShape(graphics, new BasicStroke(strokeWidth), Colors.SHAPE_HINT, shape);
             double centerX = shape.getBounds2D().getCenterX();
@@ -136,8 +188,37 @@ public abstract class AbstractCuttable extends AbstractEntity implements Cuttabl
         return new Rectangle2D.Double(bounds.getX(), bounds.getY(), Math.max(bounds.getWidth(), 0.001), Math.max(bounds.getHeight(), 0.001));
     }
 
+    @Override
+    public List<EntitySetting> getSettings() {
+        return Arrays.asList(
+                EntitySetting.ANCHOR,
+                EntitySetting.POSITION_X,
+                EntitySetting.POSITION_Y,
+                EntitySetting.WIDTH,
+                EntitySetting.HEIGHT,
+                EntitySetting.ROTATION,
+                EntitySetting.CUT_TYPE,
+                EntitySetting.START_DEPTH,
+                EntitySetting.TARGET_DEPTH,
+                EntitySetting.SPINDLE_SPEED,
+                EntitySetting.PASSES,
+                EntitySetting.FEED_RATE
+        );
+    }
+
+    private Color getLaserCutColor() {
+        int color = Math.max(0, Math.min(255, (int) Math.round(255d * getLaserCutAlpha()) - 50));
+        return new Color(color, color, color);
+    }
+
+    private double getLaserCutAlpha() {
+        return 1d - Math.max(Float.MIN_VALUE, getEntitySetting(EntitySetting.SPINDLE_SPEED)
+                .map(v -> (Integer) v / 100d).orElse(0d));
+    }
+
+
     private Color getCutColor() {
-        int color = Math.max(0, Math.min(255, (int) Math.round(255d * getCutAlpha()) - 25));
+        int color = Math.max(0, Math.min(255, (int) Math.round(255d * getCutAlpha()) - 50));
         return new Color(color, color, color);
     }
 
@@ -154,6 +235,18 @@ public abstract class AbstractCuttable extends AbstractEntity implements Cuttabl
         copy.setStartDepth(getStartDepth());
         copy.setTargetDepth(getTargetDepth());
         copy.setCutType(getCutType());
+        copy.setSpindleSpeed(getSpindleSpeed());
+        copy.setPasses(getPasses());
         copy.setHidden(isHidden());
+    }
+
+    @Override
+    public Optional<Object> getEntitySetting(EntitySetting entitySetting) {
+        return entitySettings.getEntitySetting(entitySetting);
+    }
+
+    @Override
+    public void setEntitySetting(EntitySetting entitySetting, Object value) {
+        entitySettings.setEntitySetting(entitySetting, value);
     }
 }

@@ -18,7 +18,6 @@
 */
 package com.willwinder.ugs.nbp.editor.lexer;
 
-import com.willwinder.ugs.nbp.editor.lexer.GcodeTokenId;
 import org.junit.Test;
 import org.netbeans.api.lexer.Token;
 import org.netbeans.api.lexer.TokenHierarchy;
@@ -191,6 +190,27 @@ public class GcodeLexerTest {
     }
 
     @Test
+    public void parsingGcodeShouldIdentifyParametersWithPlusSign() {
+        String text = "G01 X+100";
+        TokenSequence<GcodeTokenId> ts = parseTokenSequence(text);
+
+        ts.moveNext();
+        Token<?> t = ts.token();
+        assertEquals(GcodeTokenId.MOVEMENT, t.id());
+        assertEquals("G01", t.text());
+
+        ts.moveNext();
+        t = ts.token();
+        assertEquals(GcodeTokenId.WHITESPACE, t.id());
+        assertEquals(" ", t.text());
+
+        ts.moveNext();
+        t = ts.token();
+        assertEquals(GcodeTokenId.AXIS, t.id());
+        assertEquals("X+100", t.text());
+    }
+
+    @Test
     public void parsingGcodeShouldIdentifyParametersWithDecimals() {
         String text = "G01 X-100.1 S100.10";
         TokenSequence<GcodeTokenId> ts = parseTokenSequence(text);
@@ -314,6 +334,67 @@ public class GcodeLexerTest {
     }
 
     @Test
+    public void parsingParametersWithMultipleLeadingSpaceShouldBeOk() {
+        String text = "G01 X  -.100 Y\t10 Z 0.3 S 1000 F 500";
+        TokenSequence<GcodeTokenId> ts = parseTokenSequence(text);
+
+        ts.moveNext();
+        Token<?> t = ts.token();
+        assertEquals(GcodeTokenId.MOVEMENT, t.id());
+        assertEquals("G01", t.text());
+
+        ts.moveNext();
+        t = ts.token();
+        assertEquals(GcodeTokenId.WHITESPACE, t.id());
+        assertEquals(" ", t.text());
+
+        ts.moveNext();
+        t = ts.token();
+        assertEquals(GcodeTokenId.AXIS, t.id());
+        assertEquals("X  -.100", t.text());
+
+        ts.moveNext();
+        t = ts.token();
+        assertEquals(GcodeTokenId.WHITESPACE, t.id());
+        assertEquals(" ", t.text());
+
+        ts.moveNext();
+        t = ts.token();
+        assertEquals(GcodeTokenId.AXIS, t.id());
+        assertEquals("Y\t10", t.text());
+
+        ts.moveNext();
+        t = ts.token();
+        assertEquals(GcodeTokenId.WHITESPACE, t.id());
+        assertEquals(" ", t.text());
+
+        ts.moveNext();
+        t = ts.token();
+        assertEquals(GcodeTokenId.AXIS, t.id());
+        assertEquals("Z 0.3", t.text());
+
+        ts.moveNext();
+        t = ts.token();
+        assertEquals(GcodeTokenId.WHITESPACE, t.id());
+        assertEquals(" ", t.text());
+
+        ts.moveNext();
+        t = ts.token();
+        assertEquals(GcodeTokenId.PARAMETER, t.id());
+        assertEquals("S 1000", t.text());
+
+        ts.moveNext();
+        t = ts.token();
+        assertEquals(GcodeTokenId.WHITESPACE, t.id());
+        assertEquals(" ", t.text());
+
+        ts.moveNext();
+        t = ts.token();
+        assertEquals(GcodeTokenId.PARAMETER, t.id());
+        assertEquals("F 500", t.text());
+    }
+
+    @Test
     public void parsingParametersWithSpaceShouldGenerateErrors() {
         String text = "G01 X- .100 Z0. 3";
         TokenSequence<GcodeTokenId> ts = parseTokenSequence(text);
@@ -367,5 +448,47 @@ public class GcodeLexerTest {
         t = ts.token();
         assertEquals(GcodeTokenId.ERROR, t.id());
         assertEquals("3", t.text());
+    }
+
+    @Test
+    public void parsingNestedBlockComments() {
+        String text = "G01 (nested (comment))";
+        TokenSequence<GcodeTokenId> ts = parseTokenSequence(text);
+
+        ts.moveNext();
+        Token<?> t = ts.token();
+        assertEquals(GcodeTokenId.MOVEMENT, t.id());
+        assertEquals("G01", t.text());
+
+        ts.moveNext();
+        t = ts.token();
+        assertEquals(GcodeTokenId.WHITESPACE, t.id());
+        assertEquals(" ", t.text());
+
+        ts.moveNext();
+        t = ts.token();
+        assertEquals(GcodeTokenId.COMMENT, t.id());
+        assertEquals("(nested (comment))", t.text());
+    }
+
+    @Test
+    public void parsingNestedBlockCommentsWithMissingLastParanthesis() {
+        String text = "G01 (nested (comment)";
+        TokenSequence<GcodeTokenId> ts = parseTokenSequence(text);
+
+        ts.moveNext();
+        Token<?> t = ts.token();
+        assertEquals(GcodeTokenId.MOVEMENT, t.id());
+        assertEquals("G01", t.text());
+
+        ts.moveNext();
+        t = ts.token();
+        assertEquals(GcodeTokenId.WHITESPACE, t.id());
+        assertEquals(" ", t.text());
+
+        ts.moveNext();
+        t = ts.token();
+        assertEquals(GcodeTokenId.ERROR, t.id());
+        assertEquals("(nested (comment)", t.text());
     }
 }

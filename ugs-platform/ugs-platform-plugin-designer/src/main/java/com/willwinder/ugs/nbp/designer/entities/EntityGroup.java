@@ -20,12 +20,10 @@ package com.willwinder.ugs.nbp.designer.entities;
 
 import com.willwinder.ugs.nbp.designer.Utils;
 import com.willwinder.ugs.nbp.designer.gui.Drawing;
-import com.willwinder.ugs.nbp.designer.model.Size;
 
 import java.awt.Graphics2D;
 import java.awt.Shape;
 import java.awt.geom.AffineTransform;
-import java.awt.geom.RectangularShape;
 import java.awt.geom.NoninvertibleTransformException;
 import java.awt.geom.Point2D;
 import java.awt.geom.Rectangle2D;
@@ -33,7 +31,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 /**
@@ -43,7 +40,6 @@ public class EntityGroup extends AbstractEntity implements EntityListener {
     private final List<Entity> children;
 
     private double groupRotation = 0;
-    private Point2D cachedCenter = new Point2D.Double(0, 0);
     private Rectangle2D cachedBounds = new Rectangle2D.Double(0, 0, 0, 0);
 
     public EntityGroup() {
@@ -58,16 +54,12 @@ public class EntityGroup extends AbstractEntity implements EntityListener {
     }
 
     @Override
-    public void setSize(Size size) {
-        Size originalSize = getSize();
-        scale(size.getWidth() / originalSize.getWidth(), size.getHeight() / originalSize.getHeight());
-    }
-
-    @Override
     public void rotate(double angle) {
         try {
             groupRotation += angle;
-            getAllChildren().forEach(entity -> entity.rotate(getCenter(), angle));
+            Point2D center = getCenter();
+            getAllChildren().forEach(entity -> entity.rotate(center, angle));
+            invalidateBounds();
             notifyEvent(new EntityEvent(this, EventType.ROTATED));
         } catch (Exception e) {
             throw new EntityException("Couldn't set the rotation", e);
@@ -79,8 +71,8 @@ public class EntityGroup extends AbstractEntity implements EntityListener {
         try {
             groupRotation += angle;
             getAllChildren().forEach(entity -> entity.rotate(center, angle));
+            invalidateBounds();
             notifyEvent(new EntityEvent(this, EventType.ROTATED));
-            invalidateCenter();
         } catch (Exception e) {
             throw new EntityException("Couldn't set the rotation", e);
         }
@@ -92,30 +84,15 @@ public class EntityGroup extends AbstractEntity implements EntityListener {
     }
 
     @Override
-    public Size getSize() {
-        Rectangle2D bounds = getBounds();
-        return new Size(bounds.getWidth(), bounds.getHeight());
-    }
-
-    @Override
     public Rectangle2D getBounds() {
         if (cachedBounds != null) {
             return cachedBounds;
         }
 
-        List<Entity> allChildren = getAllChildren();
-        double maxX = allChildren.stream().map(Entity::getBounds).mapToDouble(RectangularShape::getMaxX).max().orElse(0);
-        double maxY = allChildren.stream().map(Entity::getBounds).mapToDouble(RectangularShape::getMaxY).max().orElse(0);
-        double minX = allChildren.stream().map(Entity::getBounds).mapToDouble(RectangularShape::getMinX).min().orElse(0);
-        double minY = allChildren.stream().map(Entity::getBounds).mapToDouble(RectangularShape::getMinY).min().orElse(0);
-        cachedBounds = new Rectangle2D.Double(minX, minY, maxX - minX, maxY - minY);
+        cachedBounds = getAllChildren().stream()
+                .map(Entity::getBounds)
+                .collect(BoundsCollector.toBounds());
         return cachedBounds;
-    }
-
-    @Override
-    public Point2D getPosition(Anchor anchor) {
-        Rectangle2D bounds = getBounds();
-        return new Point2D.Double(bounds.getX(), bounds.getY());
     }
 
     @Override
@@ -131,7 +108,7 @@ public class EntityGroup extends AbstractEntity implements EntityListener {
         if (!containsChild(entity)) {
             children.add(entity);
             entity.addListener(this);
-            invalidateCenter();
+            invalidateBounds();
         }
     }
 
@@ -142,22 +119,11 @@ public class EntityGroup extends AbstractEntity implements EntityListener {
 
         children.add(index, entity);
         entity.addListener(this);
-        invalidateCenter();
+        invalidateBounds();
     }
 
-    private void invalidateCenter() {
-        cachedCenter = null;
+    public void invalidateBounds() {
         cachedBounds = null;
-    }
-
-    @Override
-    public Point2D getCenter() {
-        if (cachedCenter == null) {
-            Rectangle2D bounds = getBounds();
-            cachedCenter = new Point2D.Double(bounds.getCenterX(), bounds.getCenterY());
-        }
-
-        return cachedCenter;
     }
 
     public void addAll(List<Entity> entities) {
@@ -167,7 +133,7 @@ public class EntityGroup extends AbstractEntity implements EntityListener {
                 entity.addListener(this);
             }
         });
-        invalidateCenter();
+        invalidateBounds();
     }
 
     @Override
@@ -175,15 +141,15 @@ public class EntityGroup extends AbstractEntity implements EntityListener {
         if (children != null) {
             children.forEach(c -> c.applyTransform(transform));
         }
-        invalidateCenter();
+        invalidateBounds();
     }
 
     @Override
     public void move(Point2D deltaMovement) {
         try {
             applyTransform(AffineTransform.getTranslateInstance(deltaMovement.getX(), deltaMovement.getY()));
+            invalidateBounds();
             notifyEvent(new EntityEvent(this, EventType.MOVED));
-            invalidateCenter();
         } catch (Exception e) {
             throw new EntityException("Could not make inverse transform of point", e);
         }
@@ -192,7 +158,7 @@ public class EntityGroup extends AbstractEntity implements EntityListener {
     @Override
     public void setTransform(AffineTransform transform) {
         children.forEach(c -> c.setTransform(transform));
-        invalidateCenter();
+        invalidateBounds();
     }
 
     /**
@@ -242,7 +208,7 @@ public class EntityGroup extends AbstractEntity implements EntityListener {
     public void removeChild(Entity entity) {
         entity.removeListener(this);
         children.remove(entity);
-        invalidateCenter();
+        invalidateBounds();
     }
 
     @Override
@@ -255,39 +221,35 @@ public class EntityGroup extends AbstractEntity implements EntityListener {
         this.groupRotation = 0;
         this.children.forEach(entity -> entity.removeListener(this));
         this.children.clear();
-        invalidateCenter();
+        invalidateBounds();
     }
 
     public List<Entity> getChildrenAt(Point2D p) {
-        List<Entity> result = this.children
+        return this.children
                 .stream()
                 .flatMap(s -> {
-                    if (s instanceof EntityGroup) {
-                        return ((EntityGroup) s).getChildrenAt(p).stream();
+                    if (s instanceof EntityGroup entityGroup) {
+                        return entityGroup.getChildrenAt(p).stream();
                     } else if (s.isWithin(p)) {
                         return Stream.of(s);
                     } else {
                         return Stream.empty();
                     }
-                }).collect(Collectors.toList());
-
-        return Collections.unmodifiableList(result);
+                }).toList();
     }
 
     public List<Entity> getChildrenIntersecting(Shape shape) {
-        List<Entity> result = this.children
+        return this.children
                 .stream()
                 .flatMap(s -> {
-                    if (s instanceof EntityGroup) {
-                        return ((EntityGroup) s).getChildrenIntersecting(shape).stream();
+                    if (s instanceof EntityGroup entityGroup) {
+                        return entityGroup.getChildrenIntersecting(shape).stream();
                     } else if (s.isIntersecting(shape)) {
                         return Stream.of(s);
                     } else {
                         return Stream.empty();
                     }
-                }).collect(Collectors.toList());
-
-        return Collections.unmodifiableList(result);
+                }).toList();
     }
 
     /**
@@ -315,8 +277,8 @@ public class EntityGroup extends AbstractEntity implements EntityListener {
             children.forEach(entity -> entity.rotate(center, deltaRotation));
         }
         groupRotation += deltaRotation;
+        invalidateBounds();
         notifyEvent(new EntityEvent(this, EventType.ROTATED));
-        invalidateCenter();
     }
 
     public final List<Entity> getAllChildren() {
@@ -324,17 +286,15 @@ public class EntityGroup extends AbstractEntity implements EntityListener {
             return Collections.emptyList();
         }
 
-        List<Entity> result = this.children
+        return this.children
                 .stream()
                 .flatMap(s -> {
-                    if (s instanceof EntityGroup) {
-                        return ((EntityGroup) s).getAllChildren().stream();
+                    if (s instanceof EntityGroup entityGroup) {
+                        return entityGroup.getAllChildren().stream();
                     } else {
                         return Stream.of(s);
                     }
-                }).collect(Collectors.toList());
-
-        return Collections.unmodifiableList(result);
+                }).toList();
     }
 
     @Override
@@ -346,12 +306,13 @@ public class EntityGroup extends AbstractEntity implements EntityListener {
             child.scale(sx, sy);
             child.setPosition(new Point2D.Double(originalPosition.getX() + (relativePosition.getX() * sx), originalPosition.getY() + (relativePosition.getY() * sy)));
         });
+        invalidateBounds();
         notifyEvent(new EntityEvent(this, EventType.RESIZED));
-        invalidateCenter();
     }
 
     @Override
     public void onEvent(EntityEvent entityEvent) {
+        invalidateBounds();
         notifyEvent(entityEvent);
     }
 

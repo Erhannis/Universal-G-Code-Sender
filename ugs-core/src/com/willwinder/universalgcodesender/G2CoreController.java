@@ -25,9 +25,8 @@ import com.willwinder.universalgcodesender.listeners.ControllerStatus;
 import com.willwinder.universalgcodesender.listeners.ControllerStatusBuilder;
 import com.willwinder.universalgcodesender.listeners.MessageType;
 import com.willwinder.universalgcodesender.model.CommunicatorState;
-import com.willwinder.universalgcodesender.model.PartialPosition;
-
 import static com.willwinder.universalgcodesender.model.CommunicatorState.COMM_IDLE;
+import com.willwinder.universalgcodesender.model.PartialPosition;
 
 /**
  * G2Core Control layer.
@@ -90,7 +89,7 @@ public class G2CoreController extends TinyGController {
         capabilities.addCapability(CapabilitiesConstants.CONTINUOUS_JOGGING);
         capabilities.addCapability(CapabilitiesConstants.HOMING);
         capabilities.addCapability(CapabilitiesConstants.FIRMWARE_SETTINGS);
-        capabilities.addCapability(CapabilitiesConstants.OVERRIDES);
+        capabilities.removeCapability(CapabilitiesConstants.OVERRIDES);
         capabilities.removeCapability(CapabilitiesConstants.SETUP_WIZARD);
 
         setCurrentState(COMM_IDLE);

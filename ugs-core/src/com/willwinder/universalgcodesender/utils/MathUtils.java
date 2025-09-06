@@ -116,7 +116,7 @@ public class MathUtils {
     private static int findLeftMostPointIndex(List<PartialPosition> points) {
         int leftMostPoint = 0;
         for (int i = 1; i < points.size(); i++) {
-            if (points.get(i).getX() < points.get(leftMostPoint).getX()) {
+            if (points.get(leftMostPoint).getX().isNaN() || points.get(i).getX() < points.get(leftMostPoint).getX()) {
                 leftMostPoint = i;
             }
         }
@@ -126,6 +126,22 @@ public class MathUtils {
     public static double round(double value, int decimals) {
         double power = Math.pow(10, decimals);
         return Math.round(value * power) / power;
+    }
+
+    /**
+     * Compares two double values if they are equal or very close to each other using a delta threshold.
+     *
+     * @param d1 a double value
+     * @param d2 a double value
+     * @param delta a decimal delta value with the smallest allowed difference, smaller value means more precision.
+     * @return true if they are equal or very close to equal
+     */
+    public static boolean isEqual(double d1, double d2, double delta) {
+        if (Double.compare(d1, d2) == 0) {
+            return true;
+        }
+
+        return Math.abs(d1 - d2) <= delta;
     }
 
     /**

@@ -191,6 +191,11 @@ public class TinyGFirmwareSettings implements ICommunicatorListener, IFirmwareSe
         return 0;
     }
 
+    @Override
+    public int getMaxSpindleSpeed() throws FirmwareSettingsException {
+        throw new FirmwareSettingsException("Not implemented");
+    }
+
     /*
      * IFirmwareSettingsListener
      */
@@ -223,4 +228,8 @@ public class TinyGFirmwareSettings implements ICommunicatorListener, IFirmwareSe
         serialCommunicatorDelegate.communicatorPausedOnError();
     }
 
+    @Override
+    public void onConnectionClosed() {
+
+    }
 }

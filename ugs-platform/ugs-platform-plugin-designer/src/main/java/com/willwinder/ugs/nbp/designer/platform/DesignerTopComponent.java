@@ -1,5 +1,5 @@
 /*
-    Copyright 2021 Will Winder
+    Copyright 2021-2023 Will Winder
 
     This file is part of Universal Gcode Sender (UGS).
 
@@ -21,13 +21,19 @@ package com.willwinder.ugs.nbp.designer.platform;
 import com.willwinder.ugs.nbp.designer.actions.UndoManagerListener;
 import com.willwinder.ugs.nbp.designer.entities.selection.SelectionEvent;
 import com.willwinder.ugs.nbp.designer.entities.selection.SelectionListener;
-import com.willwinder.ugs.nbp.designer.gui.DrawingContainer;
+import com.willwinder.ugs.nbp.designer.gui.DrawingOverlayContainer;
+import com.willwinder.ugs.nbp.designer.gui.DrawingScrollContainer;
 import com.willwinder.ugs.nbp.designer.gui.PopupMenuFactory;
 import com.willwinder.ugs.nbp.designer.gui.ToolBox;
 import com.willwinder.ugs.nbp.designer.logic.Controller;
 import com.willwinder.ugs.nbp.designer.logic.ControllerFactory;
+import com.willwinder.ugs.nbp.lib.Mode;
 import com.willwinder.ugs.nbp.lib.lookup.CentralLookup;
+import com.willwinder.universalgcodesender.firmware.FirmwareSettingsException;
+import com.willwinder.universalgcodesender.listeners.UGSEventListener;
 import com.willwinder.universalgcodesender.model.BackendAPI;
+import com.willwinder.universalgcodesender.model.UGSEvent;
+import com.willwinder.universalgcodesender.model.events.FirmwareSettingEvent;
 import org.openide.awt.UndoRedo;
 import org.openide.cookies.CloseCookie;
 import org.openide.loaders.DataNode;
@@ -35,8 +41,10 @@ import org.openide.nodes.Children;
 import org.openide.text.DataEditorSupport;
 import org.openide.windows.TopComponent;
 
+import javax.swing.JComponent;
 import java.awt.BorderLayout;
 import java.io.File;
+import java.io.Serial;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -49,11 +57,12 @@ import java.util.logging.Logger;
         preferredID = "DesignerTopComponent",
         persistenceType = TopComponent.PERSISTENCE_NEVER
 )
-@TopComponent.Registration(mode = "editor", openAtStartup = false)
-public class DesignerTopComponent extends TopComponent implements UndoManagerListener, SelectionListener {
+@TopComponent.Registration(mode = Mode.EDITOR_PRIMARY, openAtStartup = false)
+public class DesignerTopComponent extends TopComponent implements UndoManagerListener, SelectionListener, UGSEventListener {
+    @Serial
     private static final long serialVersionUID = 3123334398723987873L;
     private static final Logger LOGGER = Logger.getLogger(DesignerTopComponent.class.getSimpleName());
-    private static DrawingContainer drawingContainer;
+    private static JComponent drawingContainer;
     private final transient UndoManagerAdapter undoManagerAdapter;
     private final transient BackendAPI backend;
     private final transient Controller controller;
@@ -63,11 +72,13 @@ public class DesignerTopComponent extends TopComponent implements UndoManagerLis
         super();
         this.dataObject = dataObject;
         backend = CentralLookup.getDefault().lookup(BackendAPI.class);
+        backend.addUGSEventListener(this);
         controller = ControllerFactory.getController();
+        initSettingsAdapter();
 
         // We need to reuse the drawing container for each loaded file
         if (drawingContainer == null) {
-            drawingContainer = new DrawingContainer(controller);
+            drawingContainer = new DrawingOverlayContainer(controller, new DrawingScrollContainer(controller));
         }
 
         undoManagerAdapter = new UndoManagerAdapter(controller.getUndoManager());
@@ -78,6 +89,15 @@ public class DesignerTopComponent extends TopComponent implements UndoManagerLis
         loadDesign(dataObject);
         updateFilename();
         PlatformUtils.registerActions(getActionMap(), this);
+        updateMaxSpindleSpeed();
+    }
+
+    private void initSettingsAdapter() {
+        // Load settings from the platform configuration
+        controller.getSettings().applySettings(SettingsAdapter.loadSettings());
+
+        // Add a settings listener to sync settings to the platform configuration
+        controller.getSettings().addListener(() -> SettingsAdapter.saveSettings(controller.getSettings()));
     }
 
     private void loadDesign(UgsDataObject dataObject) {
@@ -131,6 +151,7 @@ public class DesignerTopComponent extends TopComponent implements UndoManagerLis
         controller.getUndoManager().removeListener(this);
         controller.release();
         try {
+            backend.removeUGSEventListener(this);
             backend.unsetGcodeFile();
         } catch (Exception e) {
             // Never mind
@@ -159,7 +180,6 @@ public class DesignerTopComponent extends TopComponent implements UndoManagerLis
     @Override
     public void onChanged() {
         dataObject.setModified(true);
-
     }
 
     @Override
@@ -168,5 +188,25 @@ public class DesignerTopComponent extends TopComponent implements UndoManagerLis
         PlatformUtils.openSettings(controller);
         PlatformUtils.openEntitesTree(controller);
         requestActive();
+    }
+
+    @Override
+    public void UGSEvent(UGSEvent evt) {
+        if (evt instanceof FirmwareSettingEvent && controller.getSettings().getDetectMaxSpindleSpeed()) {
+            updateMaxSpindleSpeed();
+        }
+    }
+
+    private void updateMaxSpindleSpeed() {
+        if (!backend.isConnected()) {
+            return;
+        }
+
+        try {
+            int maxSpindleSpeed = backend.getController().getFirmwareSettings().getMaxSpindleSpeed();
+            controller.getSettings().setMaxSpindleSpeed(maxSpindleSpeed);
+        } catch (FirmwareSettingsException e) {
+            // Never mind...
+        }
     }
 }

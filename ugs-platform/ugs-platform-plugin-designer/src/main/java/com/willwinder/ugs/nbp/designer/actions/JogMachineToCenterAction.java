@@ -1,5 +1,5 @@
 /*
-    Copyright 2023 Will Winder
+    Copyright 2023-2024 Will Winder
 
     This file is part of Universal Gcode Sender (UGS).
 
@@ -18,29 +18,19 @@
  */
 package com.willwinder.ugs.nbp.designer.actions;
 
-import com.willwinder.ugs.nbp.designer.entities.selection.SelectionEvent;
-import com.willwinder.ugs.nbp.designer.entities.selection.SelectionListener;
-import com.willwinder.ugs.nbp.designer.entities.selection.SelectionManager;
 import com.willwinder.ugs.nbp.designer.logic.ControllerFactory;
 import com.willwinder.ugs.nbp.lib.lookup.CentralLookup;
 import com.willwinder.ugs.nbp.lib.services.LocalizingService;
-import com.willwinder.universalgcodesender.listeners.ControllerState;
-import com.willwinder.universalgcodesender.listeners.UGSEventListener;
-import com.willwinder.universalgcodesender.model.BackendAPI;
 import com.willwinder.universalgcodesender.model.PartialPosition;
-import com.willwinder.universalgcodesender.model.UGSEvent;
-import com.willwinder.universalgcodesender.model.events.ControllerStateEvent;
+import static com.willwinder.universalgcodesender.model.UnitUtils.Units.MM;
 import com.willwinder.universalgcodesender.services.JogService;
 import com.willwinder.universalgcodesender.utils.ThreadHelper;
 import org.openide.awt.ActionID;
 import org.openide.awt.ActionRegistration;
 import org.openide.util.ImageUtilities;
 
-import javax.swing.SwingUtilities;
 import java.awt.event.ActionEvent;
 import java.awt.geom.Point2D;
-
-import static com.willwinder.universalgcodesender.model.UnitUtils.Units.MM;
 
 /**
  * An action that will jog the machine to the center of the selected objects
@@ -52,38 +42,20 @@ import static com.willwinder.universalgcodesender.model.UnitUtils.Units.MM;
         id = "JogMachineToCenterAction")
 @ActionRegistration(
         iconBase = JogMachineToCenterAction.SMALL_ICON_PATH,
-        displayName = "Jog machine to center",
+        displayName = "Jog to center",
         lazy = false)
-public class JogMachineToCenterAction extends AbstractDesignAction implements SelectionListener, UGSEventListener {
+public class JogMachineToCenterAction extends JogMachineAbstractAction {
     public static final String SMALL_ICON_PATH = "img/jog-to.svg";
     public static final String LARGE_ICON_PATH = "img/jog-to24.svg";
-    private final transient BackendAPI backend;
 
     public JogMachineToCenterAction() {
+        super();
         putValue("menuText", "Jog machine to center");
         putValue(NAME, "Jog machine to center");
+        putValue(SHORT_DESCRIPTION, "Jog machine to center");
         putValue("iconBase", SMALL_ICON_PATH);
         putValue(SMALL_ICON, ImageUtilities.loadImageIcon(SMALL_ICON_PATH, false));
         putValue(LARGE_ICON_KEY, ImageUtilities.loadImageIcon(LARGE_ICON_PATH, false));
-
-        backend = CentralLookup.getDefault().lookup(BackendAPI.class);
-        backend.addUGSEventListener(this);
-        registerControllerListener();
-        setEnabled(isEnabled());
-    }
-
-    private void registerControllerListener() {
-        SelectionManager selectionManager = ControllerFactory.getController().getSelectionManager();
-        selectionManager.addSelectionListener(this);
-        setEnabled(isEnabled());
-    }
-
-    @Override
-    public boolean isEnabled() {
-        SelectionManager selectionManager = ControllerFactory.getController().getSelectionManager();
-        boolean hasSelection = !selectionManager.getSelection().isEmpty();
-        boolean isIdle = backend.getControllerState() == ControllerState.IDLE;
-        return hasSelection && isIdle;
     }
 
     @Override
@@ -95,17 +67,5 @@ public class JogMachineToCenterAction extends AbstractDesignAction implements Se
             JogService jogService = CentralLookup.getDefault().lookup(JogService.class);
             jogService.jogTo(centerPosition);
         });
-    }
-
-    @Override
-    public void onSelectionEvent(SelectionEvent selectionEvent) {
-        setEnabled(isEnabled());
-    }
-
-    @Override
-    public void UGSEvent(UGSEvent event) {
-        if (event instanceof ControllerStateEvent) {
-            SwingUtilities.invokeLater(() -> setEnabled(isEnabled()));
-        }
     }
 }

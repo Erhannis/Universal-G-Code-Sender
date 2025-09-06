@@ -27,7 +27,7 @@ import com.willwinder.universalgcodesender.firmware.IFirmwareSettingsListener;
 import com.willwinder.universalgcodesender.firmware.grbl.GrblFirmwareSettingsCommunicatorListener;
 import com.willwinder.universalgcodesender.communicator.ICommunicatorListener;
 import com.willwinder.universalgcodesender.types.GcodeCommand;
-import com.willwinder.universalgcodesender.types.TinyGGcodeCommand;
+import com.willwinder.universalgcodesender.firmware.tinyg.commands.TinyGGcodeCommand;
 import com.willwinder.universalgcodesender.utils.ThreadHelper;
 
 import java.util.Collections;
@@ -150,6 +150,11 @@ public class TinyGFirmwareSettingsCommunicatorListener implements ICommunicatorL
     @Override
     public void communicatorPausedOnError() {
         // Not used
+    }
+
+    @Override
+    public void onConnectionClosed() {
+
     }
 
     /**

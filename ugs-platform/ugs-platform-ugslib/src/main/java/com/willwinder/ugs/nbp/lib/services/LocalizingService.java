@@ -1,5 +1,5 @@
 /*
-    Copyright 2016-2021 Will Winder
+    Copyright 2016-2024 Will Winder
 
     This file is part of Universal Gcode Sender (UGS).
 
@@ -37,7 +37,9 @@ public class LocalizingService {
     public static final String MENU_WINDOW_CLASSIC = MENU_WINDOW + "/Classic";
     public static final String MENU_FILE = "Menu/File";
     public static final String MENU_EDIT = "Menu/Edit";
+    public static final String MENU_TOOLS = "Menu/Tools";
     public static final String MENU_MACHINE = "Menu/Machine";
+    public static final String MENU_MACHINE_PROBE = "Menu/Machine/Probe";
     public static final String MENU_PROGRAM = "Menu/Program";
     public static final String MENU_MACHINE_JOG = "Menu/Machine/Jog";
     public static final String MENU_MACHINE_JOG_STEP_SIZE = "Menu/Machine/Jog/Step Size";
@@ -52,6 +54,7 @@ public class LocalizingService {
     public static final String CATEGORY_VISUALIZER = "Visualizer";
     public static final String CATEGORY_EDIT = "Edit";
     public static final String CATEGORY_DESIGNER = "Designer";
+    public static final String CATEGORY_TOOLS = "Tools";
 
     // Initialize backend (locale setting) before we load localized strings.
     public static final String lang = CentralLookup.getDefault().lookup(BackendAPI.class).getSettings().getLanguage();
@@ -73,7 +76,7 @@ public class LocalizingService {
     public final static String OverridesWindowPath = MENU_WINDOW;
     public final static String OverridesActionId = "com.willwinder.universalgcodesender.nbp.control.OverridesTopComponent";
     public final static String OverridesCategory = CATEGORY_WINDOW;
-    
+
     public final static String MacrosTitle = Localization.getString("platform.window.macros", lang);
     public final static String MacrosTooltip = Localization.getString("platform.window.macros.tooltip", lang);
     public final static String MacrosWindowPath = MENU_WINDOW;
@@ -295,11 +298,20 @@ public class LocalizingService {
     public final static String DiagnosticsActionId = "com.willwinder.ugs.nbp.core.windows.DiagnosticsTopComponent";
     public final static String DiagnosticsCategory = CATEGORY_WINDOW;
 
+    public final static String FileBrowserPanelTitle =  Localization.getString("platform.window.fileBrowser", lang);
+    public final static String FileBrowserPanelTooltip = Localization.getString("platform.window.fileBrowser.tooltip", lang);
+    public final static String FileBrowserPanelActionId = "com.willwinder.ugs.nbp.core.windows.FileBrowserTopComponent";
+    public final static String FileBrowserPanelWindowPath = MENU_WINDOW;
+    public final static String FileBrowserPanelCategory = CATEGORY_WINDOW;
+
     public final static String RunFromTitleKey = "platform.menu.runFrom";
     public final static String RunFromTitle = Localization.getString(RunFromTitleKey, lang);
     public final static String RunFromWindowPath = MENU_PROGRAM;
     public final static String RunFromActionId = "com.willwinder.ugs.nbp.core.actions.RunFromAction";
     public final static String RunFromCategory = CATEGORY_MACHINE;
+
+    public final static String InsertPositionTitleKey = "platform.menu.insertPosition";
+    public final static String InsertPositionTitle = Localization.getString(InsertPositionTitleKey, lang);
 
     public final static String ToolboxTitle = Localization.getString("platform.plugin.toolbox.title", lang);
     public final static String ToolboxTooltip = Localization.getString("platform.plugin.toolbox.tooltip", lang);
@@ -307,6 +319,13 @@ public class LocalizingService {
 
     public final static String EditVisualizerOptionsTitleKey = "platform.visualizer.edit.options.title";
     public final static String EditVisualizerOptionsTitle = Localization.getString(EditVisualizerOptionsTitleKey, lang);
+
+    public final static String ToggleUnitTitleKey = "platform.menu.toggleUnit";
+    public final static String ToggleUnitActionId = "com.willwinder.ugs.nbp.core.actions.ToggleUnitAction";
+    public final static String ToggleUnitTitle = Localization.getString(ToggleUnitTitleKey, lang);
+    public final static String ToggleUnitTooltip = Localization.getString(ToggleUnitTitleKey + ".tooltip", lang);
+    public final static String ToggleUnitWindowPath = MENU_MACHINE;
+    public final static String ToggleUnitCategory = CATEGORY_MACHINE;
 
     public LocalizingService() throws IOException {
         ActionRegistrationService ars =  Lookup.getDefault().lookup(ActionRegistrationService.class);

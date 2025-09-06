@@ -1,5 +1,5 @@
 /*
-    Copyright 2021 Will Winder
+    Copyright 2021-2024 Will Winder
 
     This file is part of Universal Gcode Sender (UGS).
 
@@ -35,7 +35,9 @@ public class Settings {
     private UnitUtils.Units preferredUnits = UnitUtils.Units.MM;
     private double toolStepOver = 0.3;
     private double depthPerPass = 1;
-    private double spindleSpeed;
+    private double laserDiameter = 0.2;
+    private int maxSpindleSpeed = 255;
+    private boolean detectMaxSpindleSpeed = true;
 
     public Settings() {
     }
@@ -72,7 +74,7 @@ public class Settings {
     }
 
     public void setToolDiameter(double toolDiameter) {
-        this.toolDiameter = toolDiameter;
+        this.toolDiameter = Math.abs(toolDiameter);
         notifyListeners();
     }
 
@@ -136,7 +138,15 @@ public class Settings {
     }
 
     public void setToolStepOver(double toolStepOver) {
+        toolStepOver = Math.abs(toolStepOver);
+        if (toolStepOver == 0) {
+            toolStepOver = 0.01;
+        } else if (toolStepOver > 1) {
+            toolStepOver = 1;
+        }
+
         this.toolStepOver = toolStepOver;
+        notifyListeners();
     }
 
     public String getStockSizeDescription() {
@@ -144,38 +154,65 @@ public class Settings {
         return Utils.formatter.format(getStockThickness() * scale) + " " + getPreferredUnits().abbreviation;
     }
 
-    public String getToolDescription() {
-        double scale = UnitUtils.scaleUnits(UnitUtils.Units.MM, getPreferredUnits());
-        return Utils.formatter.format(getToolDiameter() * scale) + " " + getPreferredUnits().abbreviation;
-    }
-
     public double getDepthPerPass() {
         return depthPerPass;
     }
 
     public void setDepthPerPass(double depthPerPass) {
-        this.depthPerPass = depthPerPass;
-    }
+        if (depthPerPass == 0) {
+            depthPerPass = 0.001;
+        }
 
-    public double getSpindleSpeed() {
-        return spindleSpeed;
-    }
-
-    public void setSpindleSpeed(double spindleSpeed) {
-        this.spindleSpeed = spindleSpeed;
+        this.depthPerPass = Math.abs(depthPerPass);
+        notifyListeners();
     }
 
     public void applySettings(Settings settings) {
-        if (settings != null) {
-            setDepthPerPass(settings.getDepthPerPass());
-            setFeedSpeed(settings.getFeedSpeed());
-            setPlungeSpeed(settings.getPlungeSpeed());
-            setStockThickness(settings.getStockThickness());
-            setToolDiameter(settings.getToolDiameter());
-            setToolStepOver(settings.getToolStepOver());
-            setPreferredUnits(settings.getPreferredUnits());
-            setSafeHeight(settings.getSafeHeight());
-            setSpindleSpeed(settings.getSpindleSpeed());
+        if (settings == null) {
+            return;
         }
+
+        setDepthPerPass(settings.getDepthPerPass());
+        setFeedSpeed(settings.getFeedSpeed());
+        setPlungeSpeed(settings.getPlungeSpeed());
+        setStockThickness(settings.getStockThickness());
+        setToolDiameter(settings.getToolDiameter());
+        setToolStepOver(settings.getToolStepOver());
+        setPreferredUnits(settings.getPreferredUnits());
+        setSafeHeight(settings.getSafeHeight());
+        setLaserDiameter(settings.getLaserDiameter());
+        setMaxSpindleSpeed(settings.getMaxSpindleSpeed());
+        setDetectMaxSpindleSpeed(settings.getDetectMaxSpindleSpeed());
+
+    }
+
+    public double getLaserDiameter() {
+        return laserDiameter;
+    }
+
+    public void setLaserDiameter(double laserDiameter) {
+        this.laserDiameter = laserDiameter;
+        notifyListeners();
+    }
+
+    public int getMaxSpindleSpeed() {
+        return maxSpindleSpeed;
+    }
+
+    public void setMaxSpindleSpeed(int maxSpindleSpeed) {
+        if (this.maxSpindleSpeed == Math.abs(maxSpindleSpeed)) {
+            return;
+        }
+        this.maxSpindleSpeed = Math.abs(maxSpindleSpeed);
+        notifyListeners();
+    }
+
+    public boolean getDetectMaxSpindleSpeed() {
+        return detectMaxSpindleSpeed;
+    }
+
+    public void setDetectMaxSpindleSpeed(boolean detectMaxSpindleSpeed) {
+        this.detectMaxSpindleSpeed = detectMaxSpindleSpeed;
+        notifyListeners();
     }
 }

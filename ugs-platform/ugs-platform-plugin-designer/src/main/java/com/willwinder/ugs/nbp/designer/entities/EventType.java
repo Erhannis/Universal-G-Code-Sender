@@ -22,6 +22,7 @@ package com.willwinder.ugs.nbp.designer.entities;
  * @author Joacim Breiler
  */
 public enum EventType {
+    SELECTED,
     ROTATED,
     MOVED,
     RESIZED,

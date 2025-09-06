@@ -86,8 +86,7 @@ public interface BackendAPI extends BackendAPIReadOnly {
     void applyGcodeParser(GcodeParser gcp) throws Exception;
 
     /**
-     * Adds a command processor and applies it to currently loaded program and subsequent
-     * loaded gcode programs.
+     * Adds a command processor and applies it to currently loaded program.
      *
      * @param commandProcessor a command processor.
      * @throws Exception
@@ -169,10 +168,6 @@ public interface BackendAPI extends BackendAPIReadOnly {
     void issueSoftReset() throws Exception;
     void requestParserState() throws Exception;
 
-    // Programatically call an override.
-    void sendOverrideCommand(Overrides override) throws Exception;
-           
-    // Shouldn't be needed often.
     IController getController();
 
     /**

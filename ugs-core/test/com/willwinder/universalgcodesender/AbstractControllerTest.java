@@ -26,19 +26,24 @@ import com.willwinder.universalgcodesender.gcode.DefaultCommandCreator;
 import com.willwinder.universalgcodesender.gcode.ICommandCreator;
 import com.willwinder.universalgcodesender.listeners.ControllerListener;
 import com.willwinder.universalgcodesender.listeners.ControllerState;
-import com.willwinder.universalgcodesender.listeners.ControllerStatus;
-import com.willwinder.universalgcodesender.model.Position;
-import com.willwinder.universalgcodesender.model.UnitUtils;
 import com.willwinder.universalgcodesender.services.MessageService;
-import com.willwinder.universalgcodesender.types.GcodeCommand;
 import com.willwinder.universalgcodesender.utils.GcodeStreamTest;
 import com.willwinder.universalgcodesender.utils.IGcodeStreamReader;
 import com.willwinder.universalgcodesender.utils.Settings;
 import com.willwinder.universalgcodesender.utils.SimpleGcodeStreamReader;
 import org.apache.commons.io.FileUtils;
 import org.easymock.EasyMock;
+import static org.easymock.EasyMock.anyObject;
+import static org.easymock.EasyMock.anyString;
+import static org.easymock.EasyMock.eq;
+import static org.easymock.EasyMock.expect;
+import static org.easymock.EasyMock.expectLastCall;
+import static org.easymock.EasyMock.replay;
+import static org.easymock.EasyMock.reset;
+import static org.easymock.EasyMock.verify;
 import org.easymock.IMockBuilder;
 import org.junit.AfterClass;
+import static org.junit.Assert.assertEquals;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -46,16 +51,12 @@ import org.junit.Test;
 import java.io.File;
 import java.io.IOException;
 
-import static org.easymock.EasyMock.*;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
-
 /**
  *
  * @author wwinder
  */
 public class AbstractControllerTest {
-    
+
     private AbstractCommunicator mockCommunicator;
     private ControllerListener mockListener;
     private MessageService mockMessageService;
@@ -73,9 +74,8 @@ public class AbstractControllerTest {
         mockMessageService = EasyMock.createMock(MessageService.class);
         gcodeCreator = new DefaultCommandCreator();
 
-        IMockBuilder<AbstractController> instanceBuilder = EasyMock
-                .createMockBuilder(AbstractController.class)
-                .addMockedMethods(
+        IMockBuilder<AbstractController> instanceBuilder = EasyMock.createMockBuilder(AbstractController.class);
+        instanceBuilder.addMockedMethods(
                         "closeCommBeforeEvent",
                         "closeCommAfterEvent",
                         "openCommAfterEvent",
@@ -125,7 +125,7 @@ public class AbstractControllerTest {
         instance.setControllerState(eq(ControllerState.CONNECTING));
         expect(expectLastCall()).once();
         expect(mockCommunicator.isConnected()).andReturn(true).anyTimes();
-        mockCommunicator.connect(or(eq(ConnectionDriver.JSERIALCOMM), eq(ConnectionDriver.JSSC)), eq(port), eq(portRate));
+        mockCommunicator.connect(eq(ConnectionDriver.JSERIALCOMM), eq(port), eq(portRate));
         expect(instance.isCommOpen()).andReturn(false).once();
         expect(instance.isCommOpen()).andReturn(true).anyTimes();
     }
@@ -136,20 +136,7 @@ public class AbstractControllerTest {
         mockCommunicator.streamCommands();
         expect(expectLastCall()).once();
     }
-    private void startStreamExpectation(String port, int rate) throws Exception {
-        openInstanceExpectUtility(port, rate);
-        streamInstanceExpectUtility();
-        
-        // Making sure the commands get queued.
-        mockCommunicator.queueStreamForComm(anyObject(IGcodeStreamReader.class));
-        expect(expectLastCall()).times(1);
-    }
-    private void startStream(String port, int rate, String command) throws Exception {
-        // Open port, send some commands, make sure they are streamed.
-        instance.openCommPort(getSettings().getConnectionDriver(), port, rate);
-        instance.queueStream(new SimpleGcodeStreamReader(command, command));
-        instance.beginStreaming();
-    }
+
     private Settings getSettings() {
         return settings;
     }
@@ -165,62 +152,6 @@ public class AbstractControllerTest {
     }
 
     /**
-     * Test of getSendDuration method, of class AbstractController.
-     */
-    @Test
-    public void testGetSendDuration() throws Exception {
-        System.out.println("getSendDuration");
-
-        String command = "command";
-        String port = "/some/port";
-        int rate = 1234;
-
-        startStreamExpectation(port, rate);
-        expect(mockCommunicator.numActiveCommands()).andReturn(1);
-        expect(mockCommunicator.numActiveCommands()).andReturn(0);
-        instance.updateCommandFromResponse(anyObject(), anyString());
-        expect(expectLastCall()).times(2);
-        expect(instance.getControllerStatus()).andReturn(new ControllerStatus(ControllerState.IDLE, new Position(0,0,0, UnitUtils.Units.MM), new Position(0,0,0, UnitUtils.Units.MM)));
-        expect(instance.getControllerStatus()).andReturn(new ControllerStatus(ControllerState.IDLE, new Position(0,0,0, UnitUtils.Units.MM), new Position(0,0,0, UnitUtils.Units.MM)));
-        replay(instance, mockCommunicator);
-
-        // Time starts at zero when nothing has been sent.
-        assertEquals(0L, instance.getSendDuration());
-
-        startStream(port, rate, command);
-        long start = System.currentTimeMillis();
-
-        Thread.sleep(1000);
-
-        long time = instance.getSendDuration();
-        long checkpoint = System.currentTimeMillis();
-
-        // Began streaming at least 1 second ago.
-        assertTrue( time > (start-checkpoint));
-
-        Thread.sleep(1000);
-
-        instance.commandSent(new GcodeCommand(command));
-        instance.commandSent(new GcodeCommand(command));
-        instance.commandComplete(command);
-        instance.commandComplete(command);
-
-        time = instance.getSendDuration();
-        checkpoint = System.currentTimeMillis();
-
-        // Completed commands after at least "checkpoint" milliseconds.
-        assertTrue( time > (start-checkpoint));
-
-        Thread.sleep(1000);
-
-        // Make sure the time stopped after the last command was completed.
-        long newtime = instance.getSendDuration();
-        assertEquals( time, newtime );
-
-        verify(mockCommunicator, instance);
-    }
-
-    /**
      * Test of queueCommand method, of class AbstractController.
      */
     @Test
@@ -233,7 +164,7 @@ public class AbstractControllerTest {
 
         openInstanceExpectUtility(port, rate);
         streamInstanceExpectUtility();
-        
+
         // Making sure the commands get queued.
         mockCommunicator.queueStreamForComm(anyObject(IGcodeStreamReader.class));
         expect(expectLastCall()).times(1);
@@ -261,7 +192,7 @@ public class AbstractControllerTest {
 
         openInstanceExpectUtility(port, rate);
         streamInstanceExpectUtility();
-        
+
         // Making sure the commands get queued.
         mockCommunicator.queueStreamForComm(anyObject(IGcodeStreamReader.class));
         expect(expectLastCall()).times(1);

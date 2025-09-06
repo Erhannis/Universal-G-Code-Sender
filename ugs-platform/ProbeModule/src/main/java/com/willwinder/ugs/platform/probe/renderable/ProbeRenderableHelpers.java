@@ -1,5 +1,5 @@
 /*
-    Copyright 2017 Will Winder
+    Copyright 2017-2023 Will Winder
 
     This file is part of Universal Gcode Sender (UGS).
 
@@ -25,7 +25,7 @@ import com.willwinder.universalgcodesender.model.Position;
 
 /**
  *
- * @author wwinder
+ * @author wwinder, risototh
  */
 public class ProbeRenderableHelpers {
     private static int slices = 20;
@@ -49,13 +49,61 @@ public class ProbeRenderableHelpers {
         }
     }
 
+    public static class Triangle {
+        public double x1;
+        public double y1;
+        public double z1;
+        public double x2;
+        public double y2;
+        public double z2;
+        public double x3;
+        public double y3;
+        public double z3;
+        public double xn;
+        public double yn;
+        public double zn;
+
+        public Triangle(double x1, double y1, double z1, double x2, double y2, double z2, double x3, double y3, double z3) {
+            this.x1 = x1;
+            this.y1 = y1;
+            this.z1 = z1;
+            this.x2 = x2;
+            this.y2 = y2;
+            this.z2 = z2;
+            this.x3 = x3;
+            this.y3 = y3;
+            this.z3 = z3;
+
+            // triangle normal calculation
+            double Ux, Uy, Uz, Vx, Vy, Vz, Nx, Ny, Nz, length;
+
+            Ux = x2 - x1;
+            Uy = y2 - y1;
+            Uz = z2 - z1;
+
+            Vx = x3 - x1;
+            Vy = y3 - y1;
+            Vz = z3 - z1;
+
+            Nx = Uy * Vz - Uz * Vy;
+            Ny = Uz * Vx - Ux * Vz;
+            Nz = Ux * Vy - Uy * Vx;
+
+            length = Math.sqrt(Nx * Nx + Ny * Ny + Nz * Nz);
+
+            this.xn = Nx / length;
+            this.yn = Ny / length;
+            this.zn = Nz / length;
+        }
+    }
+
     public static void drawTouchPlate(GL2 gl, GLUT glut, Position at, double inset, double size, Position offsets,
             double bumpThickness, double plateThickness, Side X, Side Y) {
         gl.glPushMatrix();
             gl.glTranslated(
                     at.x + X.side(size-2*inset)/2,
                     at.y + Y.side(size-2*inset)/2,
-                    at.z + Math.signum(at.z) * (bumpThickness/2 - inset));
+                    at.z + Math.signum(at.z) * ((bumpThickness/2) - inset));
 
             gl.glColor4d(.8, .8, .8, 1);
             // y bump
@@ -78,7 +126,8 @@ public class ProbeRenderableHelpers {
 
             // big piece
             gl.glPushMatrix();
-                gl.glScaled(size-0.1, size-0.1, plateThickness);
+                gl.glTranslated(0, 0, (bumpThickness/2) - (plateThickness / 2));
+                gl.glScaled(size-0.1, size-0.1, plateThickness - 0.1);
                 glut.glutSolidCube(1);
             gl.glPopMatrix();
 
@@ -108,5 +157,26 @@ public class ProbeRenderableHelpers {
             gl.glTranslated(0, 0, v - 1);
             glut.glutSolidCone(.2, 1, slices, stacks);
         gl.glPopMatrix();
+    }
+
+    /**
+     * Renders the list of triangles. Usefull to render complex models from STL data.
+     *
+     * @param GL2 gl
+     * @param Triangle[] triangles
+     */
+    public static void drawTriangleSet(GL2 gl, Triangle[] triangles) {
+        if (triangles.length == 0) return;
+
+        gl.glBegin(GL2.GL_TRIANGLES);
+
+        for (Triangle triangle : triangles) {
+          gl.glNormal3d(triangle.xn, triangle.yn, triangle.zn);
+          gl.glVertex3d(triangle.x1, triangle.y1, triangle.z1);
+          gl.glVertex3d(triangle.x2, triangle.y2, triangle.z2);
+          gl.glVertex3d(triangle.x3, triangle.y3, triangle.z3);
+        }
+
+        gl.glEnd();
     }
 }

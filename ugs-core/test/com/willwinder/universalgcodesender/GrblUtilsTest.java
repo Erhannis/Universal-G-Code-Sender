@@ -1,5 +1,5 @@
 /*
-    Copyright 2013-2020 Will Winder
+    Copyright 2013-2024 Will Winder
 
     This file is part of Universal Gcode Sender (UGS).
 
@@ -39,7 +39,6 @@ public class GrblUtilsTest {
      */
     @Test
     public void testIsGrblVersionString() {
-        System.out.println("isGrblVersionString");
         String response;
         Boolean expResult;
         Boolean result;
@@ -60,7 +59,6 @@ public class GrblUtilsTest {
      */
     @Test
     public void testGetVersionDouble() {
-        System.out.println("getVersionDouble");
         String response;
         double expResult;
         double result;
@@ -75,8 +73,6 @@ public class GrblUtilsTest {
         expResult = 0.9;
         result = GrblUtils.getVersionDouble(response);
         assertEquals(expResult, result, 0.0);
-
-
     }
 
     /**
@@ -84,7 +80,6 @@ public class GrblUtilsTest {
      */
     @Test
     public void testGetVersionLetter() {
-        System.out.println("getVersionLetter");
         String response = "Grbl 0.8c";
         Character expResult = 'c';
         Character result = GrblUtils.getVersionLetter(response);
@@ -93,7 +88,6 @@ public class GrblUtilsTest {
 
     @Test
     public void testGetHomingCommand() {
-        System.out.println("getHomingCommand");
         double version;
         Character letter;
         String result;
@@ -120,7 +114,6 @@ public class GrblUtilsTest {
 
     @Test
     public void testGetKillAlarmLockCommand() {
-        System.out.println("getKillAlarmLockCommand");
         double version;
         Character letter;
         String result;
@@ -153,7 +146,6 @@ public class GrblUtilsTest {
 
     @Test
     public void testToggleCheckModeCommand() {
-        System.out.println("getToggleCheckModeCommand");
         double version;
         Character letter;
         String result;
@@ -186,7 +178,6 @@ public class GrblUtilsTest {
 
     @Test
     public void testGetViewParserStateCommand() {
-        System.out.println("getViewParserStateCommand");
         double version;
         Character letter;
         String result;
@@ -222,7 +213,6 @@ public class GrblUtilsTest {
      */
     @Test
     public void testGetGrblStatusCapabilities() {
-        System.out.println("getGrblStatusCapabilities");
         double version;
         Character letter;
         Capabilities result;
@@ -269,14 +259,9 @@ public class GrblUtilsTest {
      */
     @Test
     public void testIsGrblStatusString() {
-        System.out.println("isGrblStatusString");
-        String response;
-        Boolean expResult;
-        Boolean result;
-
-        response = "<position string is in angle brackets...>";
-        expResult = true;
-        result = GrblUtils.isGrblStatusString(response);
+        String response = "<position string is in angle brackets...>";
+        boolean expResult = true;
+        boolean result = GrblUtils.isGrblStatusString(response);
         assertEquals(expResult, result);
 
         response = "blah";
@@ -290,16 +275,9 @@ public class GrblUtilsTest {
      */
     @Test
     public void testGetStateFromStatusString() {
-        System.out.println("getStateFromStatusString");
-        String status;
-        Capabilities version = new Capabilities();
-        String expResult;
-        String result;
-
-        status = "<Idle,MPos:5.529,0.560,7.000,WPos:1.529,-5.440,-0.000>";
-        version.addCapability(GrblCapabilitiesConstants.REAL_TIME);
-        expResult = "Idle";
-        result = GrblUtils.getStateFromStatusString(status, version);
+        String status = "<Idle,MPos:5.529,0.560,7.000,WPos:1.529,-5.440,-0.000>";
+        String expResult = "Idle";
+        String result = GrblUtils.getStateFromStatusString(status);
         assertEquals(expResult, result);
     }
 
@@ -308,10 +286,20 @@ public class GrblUtilsTest {
         String status = "<Run,MPos:50.400,43.200,0.000,WPos:50000,42.600,0.000>";
         Capabilities version = new Capabilities();
         version.addCapability(GrblCapabilitiesConstants.REAL_TIME);
-        Position position = GrblUtils.getWorkPositionFromStatusString(status, version, MM);
+        Position position = GrblUtils.getWorkPositionFromStatusString(status, MM);
 
         Position expResult = new Position(50000, 42.6, 0, MM);
         assertEquals(expResult, position);
+    }
+
+    @Test
+    public void testGetRXBufferFromStatusString() {
+        String status = "<Idle,WPos:-5.529,-0.560,-7.000,RX:0>";
+        Capabilities version = new Capabilities();
+        version.addCapability(GrblCapabilitiesConstants.REAL_TIME);
+        Position expResult = new Position(-5.529,-0.560,-7.000, UnitUtils.Units.MM);
+        Position result = GrblUtils.getWorkPositionFromStatusString(status, UnitUtils.Units.MM);
+        assertEquals(expResult, result);
     }
 
     /**
@@ -319,12 +307,11 @@ public class GrblUtilsTest {
      */
     @Test
     public void testGetMachinePositionFromStatusString() {
-        System.out.println("getMachinePositionFromStatusString");
         String status = "<Idle,MPos:5.529,0.560,7.000,WPos:1.529,-5.440,-0.000>";
         Capabilities version = new Capabilities();
         version.addCapability(GrblCapabilitiesConstants.REAL_TIME);
         Position expResult = new Position(5.529, 0.560, 7.000, UnitUtils.Units.MM);
-        Position result = GrblUtils.getMachinePositionFromStatusString(status, version, UnitUtils.Units.MM);
+        Position result = GrblUtils.getMachinePositionFromStatusString(status, UnitUtils.Units.MM);
         assertEquals(expResult, result);
     }
 
@@ -333,10 +320,96 @@ public class GrblUtilsTest {
         String status = "<Run,MPos:5,43.200,1,WPos:50000,42.600,0.000>";
         Capabilities version = new Capabilities();
         version.addCapability(GrblCapabilitiesConstants.REAL_TIME);
-        Position position = GrblUtils.getMachinePositionFromStatusString(status, version, MM);
+        Position position = GrblUtils.getMachinePositionFromStatusString(status, MM);
 
         Position expResult = new Position(5, 43.2, 1, MM);
         assertEquals(expResult, position);
+    }
+
+    @Test
+    public void getStatusFromStatusStringShouldReturnAlarmState() {
+        String status = "<Alarm>";
+        Capabilities version = new Capabilities();
+        ControllerStatus controllerStatus = GrblUtils.getStatusFromStatusString(null, status, version, MM);
+        assertEquals(ControllerState.ALARM, controllerStatus.getState());
+    }
+
+    @Test
+    public void getStatusFromStatusStringV1ShouldReturnPinStatus() {
+        Capabilities version = new Capabilities();
+        version.addCapability(GrblCapabilitiesConstants.REAL_TIME);
+
+        String status = "<Idle|MPos:0.000,0.000,0.000|FS:0,0>";
+        ControllerStatus controllerStatus = GrblUtils.getStatusFromStatusStringV1(null, status, MM);
+        assertFalse(controllerStatus.getEnabledPins().cycleStart());
+
+        status = "<Idle|MPos:0.000,0.000,0.000|FS:0,0|Pn:S>";
+        controllerStatus = GrblUtils.getStatusFromStatusStringV1(null, status, MM);
+        assertTrue(controllerStatus.getEnabledPins().cycleStart());
+
+        status = "<Idle|MPos:0.000,0.000,0.000|FS:0,0>";
+        controllerStatus = GrblUtils.getStatusFromStatusStringV1(controllerStatus, status, MM);
+        assertFalse(controllerStatus.getEnabledPins().cycleStart());
+    }
+
+    @Test
+    public void getStatusFromStatusStringV1ShouldReturnAccessoryStates() {
+        Capabilities version = new Capabilities();
+        version.addCapability(GrblCapabilitiesConstants.REAL_TIME);
+
+        String status = "<Idle|MPos:0.000,0.000,0.000|FS:0,0>";
+        ControllerStatus controllerStatus = GrblUtils.getStatusFromStatusStringV1(null, status, MM);
+        assertFalse(controllerStatus.getAccessoryStates().flood());
+
+        status = "<Idle|MPos:0.000,0.000,0.000|FS:0,0|Ov:100,100,100|A:F>";
+        controllerStatus = GrblUtils.getStatusFromStatusStringV1(controllerStatus, status, MM);
+        assertTrue(controllerStatus.getAccessoryStates().flood());
+
+        status = "<Idle|MPos:0.000,0.000,0.000|FS:0,0>";
+        controllerStatus = GrblUtils.getStatusFromStatusStringV1(controllerStatus, status, MM);
+        assertTrue("The accessory states should be retained even if it isn't included in the report", controllerStatus.getAccessoryStates().flood());
+
+        status = "<Idle|MPos:0.000,0.000,0.000|FS:0,0|Ov:100,100,100>";
+        controllerStatus = GrblUtils.getStatusFromStatusStringV1(controllerStatus, status, MM);
+        assertFalse("The accessory states should be set to disabled if not included in overrides report", controllerStatus.getAccessoryStates().flood());
+
+        status = "<Idle|MPos:0.000,0.000,0.000|FS:0,0|A:F>";
+        controllerStatus = GrblUtils.getStatusFromStatusStringV1(controllerStatus, status, MM);
+        assertTrue("The accessory state should be set even if not a overrides report", controllerStatus.getAccessoryStates().flood());
+    }
+
+    @Test
+    public void getStatusFromStatusStringV1ShouldReturnState() {
+        Capabilities version = new Capabilities();
+        version.addCapability(GrblCapabilitiesConstants.REAL_TIME);
+
+        String status = "<Idle|MPos:0.000,0.000,0.000|FS:0,0>";
+        ControllerStatus controllerStatus = GrblUtils.getStatusFromStatusStringV1(null, status, MM);
+        assertEquals(ControllerState.IDLE, controllerStatus.getState());
+
+        status = "<Test|MPos:0.000,0.000,0.000|FS:0,0>";
+        controllerStatus = GrblUtils.getStatusFromStatusStringV1(null, status, MM);
+        assertEquals(ControllerState.UNKNOWN, controllerStatus.getState());
+
+        status = "<Tool|MPos:0.000,0.000,0.000|FS:0,0>";
+        controllerStatus = GrblUtils.getStatusFromStatusStringV1(null, status, MM);
+        assertEquals(ControllerState.TOOL, controllerStatus.getState());
+    }
+
+    @Test
+    public void getStatusFromStatusStringV1ShouldReturnSubState() {
+        Capabilities version = new Capabilities();
+        version.addCapability(GrblCapabilitiesConstants.REAL_TIME);
+
+        String status = "<Alarm:1|MPos:0.000,0.000,0.000|FS:0,0>";
+        ControllerStatus controllerStatus = GrblUtils.getStatusFromStatusStringV1(null, status, MM);
+        assertEquals(ControllerState.ALARM, controllerStatus.getState());
+        assertEquals("1", controllerStatus.getSubState());
+
+        status = "<Alarm:banana|MPos:0.000,0.000,0.000|FS:0,0>";
+        controllerStatus = GrblUtils.getStatusFromStatusStringV1(null, status, MM);
+        assertEquals(ControllerState.ALARM, controllerStatus.getState());
+        assertEquals("banana", controllerStatus.getSubState());
     }
 
     /**
@@ -344,19 +417,16 @@ public class GrblUtilsTest {
      */
     @Test
     public void testGetWorkPositionFromStatusString() {
-        System.out.println("getWorkPositionFromStatusString");
         String status = "<Idle,MPos:5.529,0.560,7.000,WPos:1.529,-5.440,-0.000>";
         Capabilities version = new Capabilities();
         version.addCapability(GrblCapabilitiesConstants.REAL_TIME);
         Position expResult = new Position(1.529, -5.440, -0.000, UnitUtils.Units.MM);
-        Position result = GrblUtils.getWorkPositionFromStatusString(status, version, UnitUtils.Units.MM);
+        Position result = GrblUtils.getWorkPositionFromStatusString(status, UnitUtils.Units.MM);
         assertEquals(expResult, result);
     }
 
     @Test
     public void testGetResetCoordCommand() {
-        System.out.println("getResetCoordCommand");
-
         double version = 0.8;
         Character letter = 'c';
         String result;
@@ -432,26 +502,25 @@ public class GrblUtilsTest {
         assertEquals(new Position(4.4, 5.5, 6.6, MM), controllerStatus.getWorkCoord());
         assertEquals(new Position(7.7, 8.8, 9.9, MM), controllerStatus.getWorkCoordinateOffset());
 
-        assertEquals(1, controllerStatus.getOverrides().feed);
-        assertEquals(2, controllerStatus.getOverrides().rapid);
-        assertEquals(3, controllerStatus.getOverrides().spindle);
+        assertEquals(1, controllerStatus.getOverrides().feed());
+        assertEquals(2, controllerStatus.getOverrides().rapid());
+        assertEquals(3, controllerStatus.getOverrides().spindle());
 
         assertEquals(Double.valueOf(12345.7), controllerStatus.getFeedSpeed());
         assertEquals(Double.valueOf(65432.1), controllerStatus.getSpindleSpeed());
 
-        assertTrue(controllerStatus.getEnabledPins().CycleStart);
-        assertTrue(controllerStatus.getEnabledPins().Door);
-        assertTrue(controllerStatus.getEnabledPins().Hold);
-        assertTrue(controllerStatus.getEnabledPins().SoftReset);
-        assertTrue(controllerStatus.getEnabledPins().Probe);
-        assertTrue(controllerStatus.getEnabledPins().X);
-        assertTrue(controllerStatus.getEnabledPins().Y);
-        assertTrue(controllerStatus.getEnabledPins().Z);
+        assertTrue(controllerStatus.getEnabledPins().cycleStart());
+        assertTrue(controllerStatus.getEnabledPins().door());
+        assertTrue(controllerStatus.getEnabledPins().hold());
+        assertTrue(controllerStatus.getEnabledPins().softReset());
+        assertTrue(controllerStatus.getEnabledPins().probe());
+        assertTrue(controllerStatus.getEnabledPins().x());
+        assertTrue(controllerStatus.getEnabledPins().y());
+        assertTrue(controllerStatus.getEnabledPins().z());
 
-        assertTrue(controllerStatus.getAccessoryStates().Flood);
-        assertTrue(controllerStatus.getAccessoryStates().Mist);
-        assertTrue(controllerStatus.getAccessoryStates().SpindleCCW);
-        assertTrue(controllerStatus.getAccessoryStates().SpindleCW);
+        assertTrue(controllerStatus.getAccessoryStates().flood());
+        assertTrue(controllerStatus.getAccessoryStates().mist());
+        assertTrue(controllerStatus.getAccessoryStates().spindleCW());
     }
 
     @Test
@@ -485,9 +554,8 @@ public class GrblUtilsTest {
         String status = "<Idle|WPos:4.0,5.0,6.0|WCO:7.0,8.0,9.0|Ov:1,2,3|F:12345.6|FS:12345.7,65432.1|Pn:XYZPDHRS|A:SFMC>";
         Capabilities version = new Capabilities();
         version.addCapability(GrblCapabilitiesConstants.V1_FORMAT);
-        UnitUtils.Units unit = MM;
 
-        ControllerStatus controllerStatus = GrblUtils.getStatusFromStatusString(null, status, version, unit);
+        ControllerStatus controllerStatus = GrblUtils.getStatusFromStatusString(null, status, version, MM);
 
         assertEquals(new Position(11, 13, 15, MM), controllerStatus.getMachineCoord());
         assertEquals(new Position(4, 5, 6, MM), controllerStatus.getWorkCoord());
@@ -536,14 +604,14 @@ public class GrblUtilsTest {
 
         ControllerStatus controllerStatus = GrblUtils.getStatusFromStatusString(null, status, version, MM);
 
-        assertFalse(controllerStatus.getEnabledPins().CycleStart);
-        assertFalse(controllerStatus.getEnabledPins().Door);
-        assertFalse(controllerStatus.getEnabledPins().Hold);
-        assertFalse(controllerStatus.getEnabledPins().SoftReset);
-        assertFalse(controllerStatus.getEnabledPins().Probe);
-        assertFalse(controllerStatus.getEnabledPins().X);
-        assertFalse(controllerStatus.getEnabledPins().Y);
-        assertFalse(controllerStatus.getEnabledPins().Z);
+        assertFalse(controllerStatus.getEnabledPins().cycleStart());
+        assertFalse(controllerStatus.getEnabledPins().door());
+        assertFalse(controllerStatus.getEnabledPins().hold());
+        assertFalse(controllerStatus.getEnabledPins().softReset());
+        assertFalse(controllerStatus.getEnabledPins().probe());
+        assertFalse(controllerStatus.getEnabledPins().x());
+        assertFalse(controllerStatus.getEnabledPins().y());
+        assertFalse(controllerStatus.getEnabledPins().z());
     }
 
     @Test
@@ -554,10 +622,9 @@ public class GrblUtilsTest {
 
         ControllerStatus controllerStatus = GrblUtils.getStatusFromStatusString(null, status, version, MM);
 
-        assertFalse(controllerStatus.getAccessoryStates().Flood);
-        assertFalse(controllerStatus.getAccessoryStates().Mist);
-        assertFalse(controllerStatus.getAccessoryStates().SpindleCCW);
-        assertFalse(controllerStatus.getAccessoryStates().SpindleCW);
+        assertFalse(controllerStatus.getAccessoryStates().flood());
+        assertFalse(controllerStatus.getAccessoryStates().mist());
+        assertTrue(controllerStatus.getAccessoryStates().spindleCW());
     }
 
     @Test
@@ -569,10 +636,9 @@ public class GrblUtilsTest {
 
         assertEquals(ControllerState.IDLE, controllerStatus.getState());
         assertNotNull(controllerStatus.getAccessoryStates());
-        assertFalse(controllerStatus.getAccessoryStates().Flood);
-        assertFalse(controllerStatus.getAccessoryStates().Mist);
-        assertFalse(controllerStatus.getAccessoryStates().SpindleCCW);
-        assertFalse(controllerStatus.getAccessoryStates().SpindleCW);
+        assertFalse(controllerStatus.getAccessoryStates().flood());
+        assertFalse(controllerStatus.getAccessoryStates().mist());
+        assertFalse(controllerStatus.getAccessoryStates().spindleCW());
     }
 
     @Test
@@ -589,9 +655,9 @@ public class GrblUtilsTest {
         assertEquals(new Position(7.7, 8.8, 9.9, 10.10, 11.11, 12.12, MM), controllerStatus.getWorkCoord());
         assertEquals(new Position(13.13, 14.14, 15.15, 16.16, 17.17, 18.18, MM), controllerStatus.getWorkCoordinateOffset());
 
-        assertTrue(controllerStatus.getEnabledPins().A);
-        assertTrue(controllerStatus.getEnabledPins().B);
-        assertTrue(controllerStatus.getEnabledPins().C);
+        assertTrue(controllerStatus.getEnabledPins().a());
+        assertTrue(controllerStatus.getEnabledPins().b());
+        assertTrue(controllerStatus.getEnabledPins().c());
     }
 
     @Test
@@ -607,9 +673,9 @@ public class GrblUtilsTest {
         assertEquals(new Position(1.1, 2.2, 3.3, 4.4, 5.5, Double.NaN, MM), controllerStatus.getMachineCoord());
         assertEquals(new Position(7.7, 8.8, 9.9, 10.10, 11.11, Double.NaN, MM), controllerStatus.getWorkCoord());
         assertEquals(new Position(13.13, 14.14, 15.15, 16.16, 17.17, Double.NaN, MM), controllerStatus.getWorkCoordinateOffset());
-        assertTrue(controllerStatus.getEnabledPins().A);
-        assertTrue(controllerStatus.getEnabledPins().B);
-        assertFalse(controllerStatus.getEnabledPins().C);
+        assertTrue(controllerStatus.getEnabledPins().a());
+        assertTrue(controllerStatus.getEnabledPins().b());
+        assertFalse(controllerStatus.getEnabledPins().c());
     }
 
     @Test
@@ -626,21 +692,21 @@ public class GrblUtilsTest {
         assertEquals(new Position(7.7, 8.8, 9.9, 10.10, Double.NaN, Double.NaN, MM), controllerStatus.getWorkCoord());
         assertEquals(new Position(13.13, 14.14, 15.15, 16.16, Double.NaN, Double.NaN, MM), controllerStatus.getWorkCoordinateOffset());
 
-        assertTrue(controllerStatus.getEnabledPins().A);
-        assertFalse(controllerStatus.getEnabledPins().B);
-        assertFalse(controllerStatus.getEnabledPins().C);
+        assertTrue(controllerStatus.getEnabledPins().a());
+        assertFalse(controllerStatus.getEnabledPins().b());
+        assertFalse(controllerStatus.getEnabledPins().c());
     }
 
     @Test
     public void parseProbePosition() {
         String ThreeAxisFail = "[PRB:0.000,0.000,0.000:0]";
-        assertEquals(null, GrblUtils.parseProbePosition(ThreeAxisFail, MM));
+        assertNull(GrblUtils.parseProbePosition(ThreeAxisFail, MM));
         String FourAxisFail = "[PRB:0.000,0.000,0.000,0.000:0]";
-        assertEquals(null, GrblUtils.parseProbePosition(FourAxisFail, MM));
+        assertNull(GrblUtils.parseProbePosition(FourAxisFail, MM));
         String FiveAxisFail = "[PRB:0.000,0.000,0.000,0.000,0.000:0]";
-        assertEquals(null, GrblUtils.parseProbePosition(FiveAxisFail, MM));
+        assertNull(GrblUtils.parseProbePosition(FiveAxisFail, MM));
         String SixAxisFail = "[PRB:0.000,0.000,0.000,0.000,0.000,0.000:0]";
-        assertEquals(null, GrblUtils.parseProbePosition(SixAxisFail, MM));
+        assertNull(GrblUtils.parseProbePosition(SixAxisFail, MM));
 
         String ThreeAxis = "[PRB:1.1,2.2,3.3:1]";
         assertEquals(new Position(1.1, 2.2, 3.3, MM), GrblUtils.parseProbePosition(ThreeAxis, MM));

@@ -1,5 +1,5 @@
 /*
-    Copyright 2021 Will Winder
+    Copyright 2021-2024 Will Winder
 
     This file is part of Universal Gcode Sender (UGS).
 
@@ -22,10 +22,13 @@ import com.google.common.collect.Sets;
 import com.willwinder.ugs.nbp.designer.Utils;
 import com.willwinder.ugs.nbp.designer.model.Size;
 
-import java.awt.*;
+import java.awt.Shape;
 import java.awt.geom.AffineTransform;
+import java.awt.geom.PathIterator;
 import java.awt.geom.Point2D;
 import java.awt.geom.Rectangle2D;
+import java.util.Collections;
+import java.util.List;
 import java.util.Set;
 
 /**
@@ -84,16 +87,23 @@ public abstract class AbstractEntity implements Entity {
 
     @Override
     public void setSize(Size size) {
-        if (size.getWidth() < 0.1) {
-            size = new Size(0.1, size.getHeight());
+        setSize(Anchor.BOTTOM_LEFT, size);
+    }
+
+    @Override
+    public void setSize(Anchor anchor, Size size) {
+        Point2D position = getPosition(anchor);
+        if (size.getWidth() <= 0) {
+            size = new Size(0.0001, size.getHeight());
         }
 
-        if (size.getHeight() < 0.1) {
-            size = new Size(size.getWidth(), 0.1);
+        if (size.getHeight() <= 0) {
+            size = new Size(size.getWidth(), 0.0001);
         }
 
         Size currentSize = getSize();
         scale(size.getWidth() / currentSize.getWidth(), size.getHeight() / currentSize.getHeight());
+        setPosition(anchor, position);
     }
 
     @Override
@@ -112,6 +122,11 @@ public abstract class AbstractEntity implements Entity {
     }
 
     @Override
+    public void setPosition(Point2D position) {
+        setPosition(Anchor.BOTTOM_LEFT, position);
+    }
+
+    @Override
     public Point2D getPosition(Anchor anchor) {
         Rectangle2D bounds = getBounds();
         if (anchor == Anchor.TOP_LEFT) {
@@ -124,14 +139,17 @@ public abstract class AbstractEntity implements Entity {
             return new Point2D.Double(bounds.getX(), bounds.getY());
         } else if (anchor == Anchor.BOTTOM_RIGHT) {
             return new Point2D.Double(bounds.getX() + bounds.getWidth(), bounds.getY());
+        } else if (anchor == Anchor.RIGHT_CENTER) {
+            return new Point2D.Double(bounds.getX() + bounds.getWidth(), bounds.getY() + (bounds.getHeight() / 2));
+        } else if (anchor == Anchor.LEFT_CENTER) {
+            return new Point2D.Double(bounds.getX(), bounds.getY() + (bounds.getHeight() / 2));
+        } else if (anchor == Anchor.TOP_CENTER) {
+            return new Point2D.Double(bounds.getX() + (bounds.getWidth() / 2), bounds.getY() + bounds.getHeight());
+        } else if (anchor == Anchor.BOTTOM_CENTER) {
+            return new Point2D.Double(bounds.getX() + (bounds.getWidth() / 2), bounds.getY());
         }
 
         return new Point2D.Double(bounds.getX(), bounds.getY());
-    }
-
-    @Override
-    public void setPosition(Point2D position) {
-        setPosition(Anchor.BOTTOM_LEFT, position);
     }
 
     @Override
@@ -176,8 +194,10 @@ public abstract class AbstractEntity implements Entity {
     @Override
     public void move(Point2D deltaMovement) {
         try {
-            transform.preConcatenate(AffineTransform.getTranslateInstance(deltaMovement.getX(), deltaMovement.getY()));
-            notifyEvent(new EntityEvent(this, EventType.MOVED));
+            if (deltaMovement.distance(new Point2D.Double(0d, 0d)) > 0) {
+                transform.preConcatenate(AffineTransform.getTranslateInstance(deltaMovement.getX(), deltaMovement.getY()));
+                notifyEvent(new EntityEvent(this, EventType.MOVED));
+            }
         } catch (Exception e) {
             throw new EntityException("Could not make inverse transform of point", e);
         }
@@ -193,6 +213,14 @@ public abstract class AbstractEntity implements Entity {
 
         Point2D normalized = new Point2D.Double(point2.getX() - point1.getX(), point2.getY() - point1.getY());
         return Utils.normalizeRotation(-Math.toDegrees(Math.atan2(normalized.getY(), normalized.getX())));
+    }
+
+    @Override
+    public void setRotation(double rotation) {
+        double deltaRotation = rotation - getRotation();
+        if (deltaRotation != 0) {
+            rotate(deltaRotation);
+        }
     }
 
     @Override
@@ -212,14 +240,6 @@ public abstract class AbstractEntity implements Entity {
     }
 
     @Override
-    public void setRotation(double rotation) {
-        double deltaRotation = rotation - getRotation();
-        if (deltaRotation != 0) {
-            rotate(deltaRotation);
-        }
-    }
-
-    @Override
     public void rotate(Point2D center, double angle) {
         transform.preConcatenate(AffineTransform.getRotateInstance(-Math.toRadians(angle), center.getX(), center.getY()));
         notifyEvent(new EntityEvent(this, EventType.ROTATED));
@@ -230,23 +250,23 @@ public abstract class AbstractEntity implements Entity {
         this.transform.preConcatenate(transform);
     }
 
-    @Override
-    public void setName(String name) {
-        this.name = name;
-    }
-
     public String getName() {
         return this.name;
     }
 
     @Override
-    public void setDescription(String description) {
-        this.description = description;
+    public void setName(String name) {
+        this.name = name;
     }
 
     @Override
     public String getDescription() {
         return this.description;
+    }
+
+    @Override
+    public void setDescription(String description) {
+        this.description = description;
     }
 
     public String toString() {
@@ -267,5 +287,28 @@ public abstract class AbstractEntity implements Entity {
         copy.setTransform(new AffineTransform(getTransform()));
         copy.setName(getName());
         copy.setDescription(getDescription());
+    }
+
+    @Override
+    public Point2D getFirstPoint() {
+        double[] coord = new double[6];
+        getShape().getPathIterator(null).currentSegment(coord);
+        return new Point2D.Double(coord[0], coord[1]);
+    }
+
+    @Override
+    public Point2D getLastPoint() {
+        double[] coord = new double[6];
+        PathIterator pathIterator = getShape().getPathIterator(null);
+        while (!pathIterator.isDone()) {
+            pathIterator.currentSegment(coord);
+            pathIterator.next();
+        }
+        return new Point2D.Double(coord[0], coord[1]);
+    }
+
+    @Override
+    public List<EntitySetting> getSettings() {
+        return Collections.emptyList();
     }
 }

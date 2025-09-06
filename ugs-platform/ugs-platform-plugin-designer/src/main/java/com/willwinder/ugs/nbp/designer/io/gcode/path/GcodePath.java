@@ -16,6 +16,7 @@
  */
 package com.willwinder.ugs.nbp.designer.io.gcode.path;
 
+import com.willwinder.ugs.nbp.designer.model.Settings;
 import com.willwinder.universalgcodesender.model.PartialPosition;
 
 import java.util.ArrayList;
@@ -30,7 +31,7 @@ import java.util.List;
  */
 public class GcodePath implements PathGenerator {
 
-    private List<Segment> segments;
+    private final List<Segment> segments;
 
     public GcodePath() {
         segments = new ArrayList<>();
@@ -48,6 +49,10 @@ public class GcodePath implements PathGenerator {
 
     public void addSegment(SegmentType type, PartialPosition point, String comment) {
         segments.add(new Segment(type, point, comment));
+    }
+
+    public void addSegment(SegmentType type, PartialPosition point, int feedRate) {
+        segments.add(new Segment(type, point, null, null, feedRate));
     }
 
     public void addSegment(Segment segment) {
@@ -80,10 +85,8 @@ public class GcodePath implements PathGenerator {
         return segments.isEmpty();
     }
 
-    /**
-     * @return this
-     */
-    public GcodePath toGcodePath() {
-        return this;
+    @Override
+    public void appendGcodePath(GcodePath gcodePath, Settings settings) {
+        segments.forEach(gcodePath::addSegment);
     }
 }

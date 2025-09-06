@@ -18,16 +18,32 @@
  */
 package com.willwinder.universalgcodesender;
 
-import com.willwinder.universalgcodesender.communicator.ICommunicatorListener;
+import static com.willwinder.universalgcodesender.Utils.formatter;
 import com.willwinder.universalgcodesender.communicator.ICommunicator;
+import com.willwinder.universalgcodesender.communicator.ICommunicatorListener;
 import com.willwinder.universalgcodesender.connection.ConnectionDriver;
 import com.willwinder.universalgcodesender.gcode.GcodeParser;
 import com.willwinder.universalgcodesender.gcode.GcodeState;
 import com.willwinder.universalgcodesender.gcode.ICommandCreator;
 import com.willwinder.universalgcodesender.gcode.util.GcodeUtils;
 import com.willwinder.universalgcodesender.i18n.Localization;
-import com.willwinder.universalgcodesender.listeners.*;
-import com.willwinder.universalgcodesender.model.*;
+import com.willwinder.universalgcodesender.listeners.ControllerListener;
+import com.willwinder.universalgcodesender.listeners.ControllerState;
+import com.willwinder.universalgcodesender.listeners.ControllerStatus;
+import com.willwinder.universalgcodesender.listeners.MessageType;
+import com.willwinder.universalgcodesender.model.Alarm;
+import com.willwinder.universalgcodesender.model.Axis;
+import com.willwinder.universalgcodesender.model.CommunicatorState;
+import static com.willwinder.universalgcodesender.model.CommunicatorState.COMM_CHECK;
+import static com.willwinder.universalgcodesender.model.CommunicatorState.COMM_DISCONNECTED;
+import static com.willwinder.universalgcodesender.model.CommunicatorState.COMM_IDLE;
+import static com.willwinder.universalgcodesender.model.CommunicatorState.COMM_SENDING;
+import static com.willwinder.universalgcodesender.model.CommunicatorState.COMM_SENDING_PAUSED;
+import com.willwinder.universalgcodesender.model.PartialPosition;
+import com.willwinder.universalgcodesender.model.Position;
+import com.willwinder.universalgcodesender.model.UnitUtils;
+import static com.willwinder.universalgcodesender.model.UnitUtils.Units.MM;
+import static com.willwinder.universalgcodesender.model.UnitUtils.scaleUnits;
 import com.willwinder.universalgcodesender.services.MessageService;
 import com.willwinder.universalgcodesender.types.GcodeCommand;
 import com.willwinder.universalgcodesender.utils.IGcodeStreamReader;
@@ -46,11 +62,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-import static com.willwinder.universalgcodesender.Utils.formatter;
-import static com.willwinder.universalgcodesender.model.CommunicatorState.*;
-import static com.willwinder.universalgcodesender.model.UnitUtils.Units.MM;
-import static com.willwinder.universalgcodesender.model.UnitUtils.scaleUnits;
-
 /**
  * Abstract Control layer, coordinates all aspects of control.
  *
@@ -64,7 +75,7 @@ public abstract class AbstractController implements ICommunicatorListener, ICont
 
     // These abstract objects are initialized in concrete class.
     protected final ICommunicator comm;
-    protected MessageService messageService;
+    protected MessageService messageService = new MessageService();
 
     // Added value
     private final AtomicBoolean isStreaming = new AtomicBoolean(false);
@@ -137,7 +148,7 @@ public abstract class AbstractController implements ICommunicatorListener, ICont
     /**
      * Called prior to sending commands, throw an exception if not ready.
      */
-    abstract protected void isReadyToSendCommandsEvent() throws Exception;
+    abstract protected void isReadyToSendCommandsEvent() throws ControllerException;
     /**
      * Called prior to streaming commands, separate in case you need to be more
      * restrictive about streaming a file vs. sending a command.
@@ -362,9 +373,9 @@ public abstract class AbstractController implements ICommunicatorListener, ICont
         }
 
         // No point in checking response, it throws an exception on errors.
-        this.comm.connect(connectionDriver, port, portRate);
         this.setCurrentState(COMM_IDLE);
         this.setControllerState(ControllerState.CONNECTING);
+        this.comm.connect(connectionDriver, port, portRate);
 
         if (isCommOpen()) {
             dispatchConsoleMessage(MessageType.INFO,
@@ -399,6 +410,16 @@ public abstract class AbstractController implements ICommunicatorListener, ICont
     }
 
     @Override
+    public void onConnectionClosed() {
+        try {
+            closeCommPort();
+        } catch (Exception e) {
+            // Ignore
+        }
+    }
+
+
+    @Override
     public Boolean isCommOpen() {
         return comm != null && comm.isConnected();
     }
@@ -419,6 +440,10 @@ public abstract class AbstractController implements ICommunicatorListener, ICont
     @Override
     public long getSendDuration() {
         return streamStopWatch.getTime();
+    }
+
+    public MessageService getMessageService() {
+        return messageService;
     }
 
     private enum RowStat {
@@ -483,11 +508,11 @@ public abstract class AbstractController implements ICommunicatorListener, ICont
      * Note: this is the only place where a string is sent to the comm.
      */
     @Override
-    public void sendCommandImmediately(GcodeCommand command) throws Exception {
+    public void sendCommandImmediately(GcodeCommand command) throws ControllerException {
         isReadyToSendCommandsEvent();
 
         if (!isCommOpen()) {
-            throw new Exception("Cannot send command(s), comm port is not open.");
+            throw new ControllerException("Cannot send command(s), comm port is not open.");
         }
 
         this.setCurrentState(CommunicatorState.COMM_SENDING);
@@ -496,13 +521,13 @@ public abstract class AbstractController implements ICommunicatorListener, ICont
     }
 
     @Override
-    public Boolean isReadyToReceiveCommands() throws Exception {
+    public Boolean isReadyToReceiveCommands() throws ControllerException {
         if (!isCommOpen()) {
-            throw new Exception("Comm port is not open.");
+            throw new ControllerException("Comm port is not open.");
         }
 
         if (this.isStreaming()) {
-            throw new Exception("Already streaming.");
+            throw new ControllerException("Already streaming.");
         }
 
         return true;
@@ -663,14 +688,14 @@ public abstract class AbstractController implements ICommunicatorListener, ICont
     }
 
     // No longer a listener event
-    protected void fileStreamComplete(String filename) {
+    protected void fileStreamComplete() {
         String duration = Utils.formattedMillis(getSendDuration());
         dispatchConsoleMessage(MessageType.INFO, String.format("%n**** Finished sending file in %s ****%n%n", duration));
         if (streamStopWatch.isStarted()) {
             streamStopWatch.stop();
         }
         isStreaming.set(false);
-        dispatchStreamComplete(filename);
+        dispatchStreamComplete();
     }
 
     @Override
@@ -709,8 +734,7 @@ public abstract class AbstractController implements ICommunicatorListener, ICont
                 this.comm.numActiveCommands() == 0 &&
                 rowsRemaining() <= 0 &&
                 (state == ControllerState.CHECK || state == ControllerState.IDLE)) {
-            String streamName = "queued commands";
-            this.fileStreamComplete(streamName);
+            this.fileStreamComplete();
         }
     }
 
@@ -770,7 +794,6 @@ public abstract class AbstractController implements ICommunicatorListener, ICont
         }
 
         GcodeCommand command = activeCommands.pollFirst();
-        updateCommandFromResponse(command, response);
         updateParserModalState(command);
 
         numCommandsCompleted.incrementAndGet();
@@ -782,8 +805,6 @@ public abstract class AbstractController implements ICommunicatorListener, ICont
         dispatchCommandComplete(command);
         checkStreamFinished();
     }
-
-    protected abstract void updateCommandFromResponse(GcodeCommand command, String response);
 
     @Override
     public void rawResponseListener(String response) {
@@ -822,8 +843,8 @@ public abstract class AbstractController implements ICommunicatorListener, ICont
         }
     }
 
-    protected void dispatchStreamComplete(String filename) {
-        listeners.forEach(l -> l.streamComplete(filename));
+    protected void dispatchStreamComplete() {
+        listeners.forEach(l -> l.streamComplete());
     }
 
     protected void dispatchCommandSkipped(GcodeCommand command) {

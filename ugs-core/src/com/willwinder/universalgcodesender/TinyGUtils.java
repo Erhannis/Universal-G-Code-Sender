@@ -23,8 +23,12 @@ import com.google.gson.JsonParser;
 import com.willwinder.universalgcodesender.gcode.GcodeState;
 import com.willwinder.universalgcodesender.gcode.ICommandCreator;
 import com.willwinder.universalgcodesender.gcode.util.Code;
+import com.willwinder.universalgcodesender.listeners.AccessoryStates;
 import com.willwinder.universalgcodesender.listeners.ControllerState;
 import com.willwinder.universalgcodesender.listeners.ControllerStatus;
+import com.willwinder.universalgcodesender.listeners.ControllerStatusBuilder;
+import com.willwinder.universalgcodesender.listeners.EnabledPins;
+import com.willwinder.universalgcodesender.listeners.OverridePercents;
 import com.willwinder.universalgcodesender.model.Axis;
 import com.willwinder.universalgcodesender.model.Overrides;
 import com.willwinder.universalgcodesender.model.PartialPosition;
@@ -50,7 +54,6 @@ public class TinyGUtils {
 
     public static final byte COMMAND_PAUSE = '!';
     public static final byte COMMAND_RESUME = '~';
-    public static final byte COMMAND_STATUS = '?';
     public static final byte COMMAND_QUEUE_FLUSH = '%';
     public static final byte COMMAND_KILL_JOB = 0x04;
     public static final byte COMMAND_ENQUIRE_STATUS = 0x05;
@@ -95,7 +98,7 @@ public class TinyGUtils {
      */
     private static final Pattern NUMBER_REGEX = Pattern.compile("^[-]?[\\d]+(\\.\\d+)?");
 
-    private static JsonParser parser = new JsonParser();
+    private static final JsonParser parser = new JsonParser();
 
     public static JsonObject jsonToObject(String response) {
         return parser.parse(response).getAsJsonObject();
@@ -175,7 +178,7 @@ public class TinyGUtils {
         if (isStatusResponse(response)) {
             JsonObject statusResultObject = response.getAsJsonObject(FIELD_STATUS_REPORT);
 
-            Position workCoord = lastControllerStatus.getWorkCoord();
+            Position workCoord = new Position(lastControllerStatus.getWorkCoord());
             UnitUtils.Units feedSpeedUnits = lastControllerStatus.getFeedSpeedUnits();
             if (hasNumericField(statusResultObject, FIELD_STATUS_REPORT_UNIT)) {
                 UnitUtils.Units units = statusResultObject.get(FIELD_STATUS_REPORT_UNIT).getAsInt() == 1 ? UnitUtils.Units.MM : UnitUtils.Units.INCH;
@@ -196,7 +199,7 @@ public class TinyGUtils {
             }
 
             // The machine coordinates are always in MM, make sure the position is using that unit before updating the values
-            Position machineCoord = lastControllerStatus.getMachineCoord().getPositionIn(UnitUtils.Units.MM);
+            Position machineCoord = new Position(lastControllerStatus.getMachineCoord().getPositionIn(UnitUtils.Units.MM));
             if (hasNumericField(statusResultObject, FIELD_STATUS_REPORT_MPOX)) {
                 machineCoord.setX(statusResultObject.get(FIELD_STATUS_REPORT_MPOX).getAsDouble());
             }
@@ -213,9 +216,9 @@ public class TinyGUtils {
             int overrideRapid = 100;
             int overrideSpindle = 100;
             if (lastControllerStatus.getOverrides() != null) {
-                overrideFeed = lastControllerStatus.getOverrides().feed;
-                overrideRapid = lastControllerStatus.getOverrides().rapid;
-                overrideSpindle = lastControllerStatus.getOverrides().spindle;
+                overrideFeed = lastControllerStatus.getOverrides().feed();
+                overrideRapid = lastControllerStatus.getOverrides().rapid();
+                overrideSpindle = lastControllerStatus.getOverrides().spindle();
             }
 
             if (hasNumericField(statusResultObject, FIELD_STATUS_REPORT_MFO)) {
@@ -245,11 +248,22 @@ public class TinyGUtils {
 
             Double spindleSpeed = lastControllerStatus.getSpindleSpeed();
             Position workCoordinateOffset = lastControllerStatus.getWorkCoordinateOffset();
-            ControllerStatus.EnabledPins enabledPins = lastControllerStatus.getEnabledPins();
-            ControllerStatus.AccessoryStates accessoryStates = lastControllerStatus.getAccessoryStates();
+            EnabledPins enabledPins = lastControllerStatus.getEnabledPins();
+            AccessoryStates accessoryStates = lastControllerStatus.getAccessoryStates();
 
-            ControllerStatus.OverridePercents overrides = new ControllerStatus.OverridePercents(overrideFeed, overrideRapid, overrideSpindle);
-            return new ControllerStatus(state, machineCoord, workCoord, feedSpeed, feedSpeedUnits, spindleSpeed, overrides, workCoordinateOffset, enabledPins, accessoryStates);
+            OverridePercents overrides = new OverridePercents(overrideFeed, overrideRapid, overrideSpindle);
+            return ControllerStatusBuilder.newInstance()
+                    .setState(state)
+                    .setMachineCoord(machineCoord)
+                    .setWorkCoord(workCoord)
+                    .setFeedSpeed(feedSpeed)
+                    .setFeedSpeedUnits(feedSpeedUnits)
+                    .setSpindleSpeed(spindleSpeed)
+                    .setOverrides(overrides)
+                    .setWorkCoordinateOffset(workCoordinateOffset)
+                    .setPins(enabledPins)
+                    .setStates(accessoryStates)
+                    .build();
         }
 
         return lastControllerStatus;
@@ -326,7 +340,7 @@ public class TinyGUtils {
         UnitUtils.Units currentUnits = gcodeState.getUnits();
         Position machineCoord = controllerStatus.getMachineCoord().getPositionIn(currentUnits);
 
-        PartialPosition.Builder offsets = PartialPosition.builder().setUnits(currentUnits);
+        PartialPosition.Builder offsets = PartialPosition.builder(currentUnits);
         for (Map.Entry<Axis, Double> position : positions.getPositionIn(currentUnits).getAll().entrySet()) {
             double axisOffset = -(position.getValue() - machineCoord.get(position.getKey()));
             offsets.setValue(position.getKey(), axisOffset);
@@ -414,18 +428,17 @@ public class TinyGUtils {
     /**
      * Creates an override gcode command based on the current override state.
      *
-     *
      * @param commandCreator
      * @param currentOverrides the current override state
      * @param command          the command which we want to build a gcode command from
      * @return the gcode command
      */
-    public static Optional<GcodeCommand> createOverrideCommand(ICommandCreator commandCreator, ControllerStatus.OverridePercents currentOverrides, Overrides command) {
+    public static Optional<GcodeCommand> createOverrideCommand(ICommandCreator commandCreator, OverridePercents currentOverrides, Overrides command) {
         double feedOverride = OVERRIDE_DEFAULT;
         double spindleOverride = OVERRIDE_DEFAULT;
         if (currentOverrides != null) {
-            feedOverride = ((double) currentOverrides.feed) / 100.0;
-            spindleOverride = ((double) currentOverrides.spindle) / 100.0;
+            feedOverride = ((double) currentOverrides.feed()) / 100.0;
+            spindleOverride = ((double) currentOverrides.spindle()) / 100.0;
         }
 
         GcodeCommand result = null;

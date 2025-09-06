@@ -1,6 +1,6 @@
 {
     "Name": "Smoothieware",
-    "Version": 6,
+    "Version": 8,
     "Controller": {
         "name": "SmoothieBoard",
         "args": null

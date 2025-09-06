@@ -1,5 +1,5 @@
 /*
-    Copyright 2015-2018 Will Winder
+    Copyright 2015-2024 Will Winder
 
     This file is part of Universal Gcode Sender (UGS).
 
@@ -18,12 +18,10 @@
  */
 package com.willwinder.universalgcodesender.communicator;
 
-import com.willwinder.universalgcodesender.communicator.AbstractCommunicator;
-import com.willwinder.universalgcodesender.communicator.BufferedCommunicator;
 import com.willwinder.universalgcodesender.communicator.event.CommunicatorEventDispatcher;
 import com.willwinder.universalgcodesender.connection.Connection;
 import com.willwinder.universalgcodesender.connection.ConnectionDriver;
-import com.willwinder.universalgcodesender.communicator.ICommunicatorListener;
+import com.willwinder.universalgcodesender.firmware.grbl.GrblCommandCreator;
 import com.willwinder.universalgcodesender.gcode.DefaultCommandCreator;
 import com.willwinder.universalgcodesender.types.GcodeCommand;
 import com.willwinder.universalgcodesender.utils.GcodeStreamReader;
@@ -33,31 +31,31 @@ import com.willwinder.universalgcodesender.utils.IGcodeStreamReader;
 import org.apache.commons.io.FileUtils;
 import org.easymock.EasyMock;
 import org.junit.AfterClass;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;
-
-import java.io.File;
-import java.io.IOException;
-import java.util.concurrent.LinkedBlockingDeque;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+
+import java.io.File;
+import java.io.IOException;
+import java.util.concurrent.LinkedBlockingDeque;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * @author wwinder
  */
 public class BufferedCommunicatorTest {
 
-    private static File tempDir;
     private final static Connection mockConnection = EasyMock.createMock(Connection.class);
     private final static ICommunicatorListener mockScl = EasyMock.createMock(ICommunicatorListener.class);
+    private static File tempDir;
     private BufferedCommunicator instance;
     private LinkedBlockingDeque<GcodeCommand> cb;
     private LinkedBlockingDeque<GcodeCommand> asl;
@@ -92,7 +90,6 @@ public class BufferedCommunicatorTest {
      */
     @Test
     public void testGetBufferSize() {
-        System.out.println("getBufferSize");
         assertEquals(101, instance.getBufferSize());
     }
 
@@ -101,7 +98,6 @@ public class BufferedCommunicatorTest {
      */
     @Test
     public void testQueueStringForComm() {
-        System.out.println("queueStringForComm");
         String input = "input";
         instance.queueCommand(new GcodeCommand(input));
         assertEquals(input, cb.getFirst().getCommandString());
@@ -112,8 +108,6 @@ public class BufferedCommunicatorTest {
      */
     @Test
     public void testSimpleQueueStringsStream() throws Exception {
-        System.out.println("streamCommands");
-
         String input = "input";
 
         // Check events and connection:
@@ -194,7 +188,7 @@ public class BufferedCommunicatorTest {
         //////////////
 
         // No active commands.
-        assertEquals(false, instance.areActiveCommands());
+        assertFalse(instance.areActiveCommands());
         assertEquals(0, instance.numActiveCommands());
 
         // Leave active commands in pipeline.
@@ -202,15 +196,15 @@ public class BufferedCommunicatorTest {
         instance.queueCommand(new GcodeCommand(input));
         instance.streamCommands();
 
-        assertEquals(true, instance.areActiveCommands());
+        assertTrue(instance.areActiveCommands());
         assertEquals(2, instance.numActiveCommands());
         assertEquals(input + ", " + input, instance.activeCommandSummary());
 
         // Clear out active commands.
         instance.handleResponseMessage("ok");
-        assertEquals(true, instance.areActiveCommands());
+        assertTrue(instance.areActiveCommands());
         instance.handleResponseMessage("ok");
-        assertEquals(false, instance.areActiveCommands());
+        assertFalse(instance.areActiveCommands());
 
         assertEquals(0, instance.numActiveCommands());
         EasyMock.verify(mockConnection, mockScl);
@@ -271,30 +265,48 @@ public class BufferedCommunicatorTest {
             instance.handleResponseMessage("ok");
         }
 
-        assertEquals(false, instance.areActiveCommands());
+        assertFalse(instance.areActiveCommands());
     }
 
-    /**
-     * Test of responseMessage method, of class BufferedCommunicator.
-     */
     @Test
-    public void testResponseMessage() throws Exception {
-        System.out.println("responseMessage");
+    public void handleResponseMessageShouldClearActiveCommandOnOk() {
+        ICommunicatorListener listener = mock(ICommunicatorListener.class);
+        instance.addListener(listener);
 
-        String first = "not-handled";
+        GcodeCommand command = new GcodeCommand("Command");
+        instance.queueCommand(command);
 
-        mockScl.rawResponseListener(first);
-        EasyMock.expect(EasyMock.expectLastCall()).once();
-        mockScl.rawResponseListener("ok");
-        EasyMock.expect(EasyMock.expectLastCall()).once();
-
-        EasyMock.replay(mockScl);
-
-        asl.add(new GcodeCommand("command"));
-        instance.handleResponseMessage(first);
+        assertEquals(0, asl.size());
+        instance.streamCommands();
+        assertEquals(1, asl.size());
+        instance.handleResponseMessage("not-handled");
         assertEquals(1, asl.size());
         instance.handleResponseMessage("ok");
+
         assertEquals(0, asl.size());
+        assertEquals("not-handled\nok", command.getResponse());
+        verify(listener, times(1)).rawResponseListener("not-handled");
+        verify(listener, times(1)).rawResponseListener("ok");
+    }
+
+    @Test
+    public void handleResponseMessageShouldClearActiveCommandOnError() {
+        ICommunicatorListener listener = mock(ICommunicatorListener.class);
+        instance.addListener(listener);
+
+        GcodeCommand command = new GcodeCommand("Command");
+        instance.queueCommand(command);
+
+        instance.streamCommands();
+        assertEquals(1, asl.size());
+        instance.handleResponseMessage("not-handled");
+        assertEquals(1, asl.size());
+        instance.handleResponseMessage("error");
+
+        assertEquals(0, asl.size());
+        assertEquals("not-handled\nerror", command.getResponse());
+        verify(listener, times(1)).rawResponseListener("not-handled");
+        verify(listener, times(1)).rawResponseListener("error");
     }
 
     /**
@@ -305,26 +317,19 @@ public class BufferedCommunicatorTest {
         System.out.println("openCommPort");
         String name = "";
         int baud = 0;
-        boolean expResult = true;
 
         mockConnection.addListener(EasyMock.<AbstractCommunicator>anyObject());
         EasyMock.expect(EasyMock.expectLastCall()).once();
         EasyMock.expect(mockConnection.openPort()).andReturn(true).once();
         EasyMock.replay(mockConnection);
 
-        instance.connect(ConnectionDriver.JSSC, name, baud);
+        instance.connect(ConnectionDriver.JSERIALCOMM, name, baud);
 
         EasyMock.verify(mockConnection);
     }
 
-    /**
-     * Test of closeCommPort method, of class BufferedCommunicator.
-     */
     @Test
-    public void testCloseCommPort() throws Exception {
-        System.out.println("closeCommPort");
-        boolean expResult = true;
-
+    public void disconnectShouldBeOk() throws Exception {
         mockConnection.closePort();
         EasyMock.expect(EasyMock.expectLastCall()).once();
         EasyMock.replay(mockConnection);
@@ -334,12 +339,35 @@ public class BufferedCommunicatorTest {
         EasyMock.verify(mockConnection);
     }
 
+    @Test
+    public void disconnectShouldClearCommandBuffers() throws Exception {
+        cb.add(new GcodeCommand("test1"));
+        asl.add(new GcodeCommand("test2"));
+
+        instance.disconnect();
+
+        assertTrue("Expected the command buffer to have been cleared", cb.isEmpty());
+        assertTrue("Expected the active command list to have been cleared", asl.isEmpty());
+    }
+
+    @Test
+    public void disconnectWithoutConnectionShouldBeOk() throws Exception {
+        cb.add(new GcodeCommand("test1"));
+        asl.add(new GcodeCommand("test2"));
+        instance.setConnection(null);
+
+        instance.disconnect();
+
+        assertFalse(instance.isPaused());
+        assertTrue("Expected the command buffer to have been cleared", cb.isEmpty());
+        assertTrue("Expected the active command list to have been cleared", asl.isEmpty());
+    }
+
     /**
      * Test of sendByteImmediately method, of class BufferedCommunicator.
      */
     @Test
     public void testSendByteImmediately() throws Exception {
-        System.out.println("sendByteImmediately");
         byte b = 10;
 
         String tenChar = "123456789";
@@ -360,24 +388,6 @@ public class BufferedCommunicatorTest {
         instance.sendByteImmediately(b);
 
         EasyMock.verify(mockConnection);
-    }
-
-    /**
-     * Test of sendingCommand method, of class BufferedCommunicatorImpl.
-     */
-    @Test
-    public void testSendingCommand() {
-        System.out.println("sendingCommand");
-        System.out.println("-N/A for abstract class-");
-    }
-
-    /**
-     * Test of processedCommand method, of class BufferedCommunicatorImpl.
-     */
-    @Test
-    public void testProcessedCommand() {
-        System.out.println("processedCommand");
-        System.out.println("-N/A for abstract class-");
     }
 
     @Test
@@ -526,7 +536,7 @@ public class BufferedCommunicatorTest {
         gcodeStreamWriter.close();
 
         // Stream
-        instance.queueStreamForComm(new GcodeStreamReader(gcodeFile, new DefaultCommandCreator()));
+        instance.queueStreamForComm(new GcodeStreamReader(gcodeFile, new GrblCommandCreator()));
         instance.streamCommands();
 
         // When
@@ -549,7 +559,7 @@ public class BufferedCommunicatorTest {
         gcodeStreamWriter.close();
 
         // Stream
-        instance.queueStreamForComm(new GcodeStreamReader(gcodeFile, new DefaultCommandCreator()));
+        instance.queueStreamForComm(new GcodeStreamReader(gcodeFile, new GrblCommandCreator()));
         instance.streamCommands();
 
         // When
@@ -559,7 +569,34 @@ public class BufferedCommunicatorTest {
         assertFalse(instance.isPaused());
     }
 
-    public class BufferedCommunicatorImpl extends BufferedCommunicator {
+    @Test
+    public void handleResponseMessageShouldDispatchThatCommandIsDone() throws Exception {
+        final long testThreadId = Thread.currentThread().getId();
+
+        // Given
+        Connection connection = mock(Connection.class);
+        instance.setConnection(connection);
+
+        AtomicBoolean eventDispatched = new AtomicBoolean(false);
+        GcodeCommand command = new GcodeCommand("{}");
+        command.addListener(c -> {
+            if (Thread.currentThread().getId() != testThreadId) {
+                eventDispatched.set(true);
+            } else {
+                System.err.println("GcodeCommand event was sent from the worker thread, this will cause severe performance issues.");
+            }
+        });
+
+        // When
+        instance.queueCommand(command);
+        instance.streamCommands();
+        instance.handleResponseMessage("ok");
+        Thread.sleep(100);
+
+        assertTrue("Should have sent an event notifying that the command has completed in its own thread", eventDispatched.get());
+    }
+
+    public static class BufferedCommunicatorImpl extends BufferedCommunicator {
         BufferedCommunicatorImpl(LinkedBlockingDeque<GcodeCommand> cb, LinkedBlockingDeque<GcodeCommand> asl) {
             super(cb, asl, new CommunicatorEventDispatcher());
         }
@@ -569,15 +606,6 @@ public class BufferedCommunicatorTest {
         }
 
         public void sendingCommand(String command) {
-        }
-
-        public boolean processedCommand(String response) {
-            return (response != null &&
-                    ("ok".equals(response) || response.startsWith("error")));
-        }
-
-        public boolean processedCommandIsError(String response) {
-            return (response != null && response.startsWith("error"));
         }
     }
 }

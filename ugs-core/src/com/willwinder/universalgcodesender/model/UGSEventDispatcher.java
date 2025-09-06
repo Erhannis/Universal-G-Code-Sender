@@ -57,7 +57,7 @@ public class UGSEventDispatcher implements ControllerListener, IFirmwareSettings
     /**
      * A cached instance of the controller status for preventing duplicate status events to be dispatched
      */
-    private ControllerStatus controllerStatus = new ControllerStatus();
+    private ControllerStatus controllerStatus = ControllerStatus.EMPTY_CONTROLLER_STATUS;
 
     public void sendUGSEvent(UGSEvent event) {
         LOGGER.log(Level.FINEST, "Sending event {0}.", event.getClass().getSimpleName());
@@ -73,14 +73,14 @@ public class UGSEventDispatcher implements ControllerListener, IFirmwareSettings
 
     public void addListener(UGSEventListener listener) {
         if (!listeners.contains(listener)) {
-            LOGGER.log(Level.INFO, "Adding UGSEvent listener: {0}", listener.getClass().getSimpleName());
+            LOGGER.log(Level.FINE, "Adding UGSEvent listener: {0}", listener.getClass().getSimpleName());
             listeners.add(listener);
         }
     }
 
     public void removeListener(UGSEventListener listener) {
         if (listeners.contains(listener)) {
-            LOGGER.log(Level.INFO, "Removing UGSEvent listener: {0}", listener.getClass().getSimpleName());
+            LOGGER.log(Level.FINE, "Removing UGSEvent listener: {0}", listener.getClass().getSimpleName());
             listeners.remove(listener);
         }
     }
@@ -106,9 +106,9 @@ public class UGSEventDispatcher implements ControllerListener, IFirmwareSettings
     }
 
     @Override
-    public void streamComplete(String filename) {
+    public void streamComplete() {
         sendUGSEvent(new StreamEvent(StreamEventType.STREAM_COMPLETE));
-        sendUGSEvent(new FileStateEvent(FileState.FILE_STREAM_COMPLETE, filename));
+        sendUGSEvent(new FileStateEvent(FileState.FILE_STREAM_COMPLETE));
     }
 
     @Override

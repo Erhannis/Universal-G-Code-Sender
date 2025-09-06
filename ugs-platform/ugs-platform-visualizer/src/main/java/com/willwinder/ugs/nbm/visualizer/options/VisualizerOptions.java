@@ -30,6 +30,12 @@ import java.util.ArrayList;
  * @author wwinder
  */
 public class VisualizerOptions extends ArrayList<Option<?>> {
+
+    public static String VISUALIZER_OPTION_NEWT = "platform.visualizer.newt";
+    public static String VISUALIZER_OPTION_NEWT_DESC = "platform.visualizer.newt.desc";
+    public static String VISUALIZER_OPTION_NEWT_SAMPLES = "platform.visualizer.newt.samples";
+    public static String VISUALIZER_OPTION_NEWT_SAMPLES_DESC = "platform.visualizer.newt.samples.desc";
+
     // GcodeRenderer clear color
     public static String VISUALIZER_OPTION_BG = "platform.visualizer.color.background";
 
@@ -42,6 +48,9 @@ public class VisualizerOptions extends ArrayList<Option<?>> {
     public static String VISUALIZER_OPTION_MODEL = "platform.visualizer.model";
     public static String VISUALIZER_OPTION_MODEL_DESC = "platform.visualizer.model.desc";
     public static String VISUALIZER_OPTION_LINEAR = "platform.visualizer.color.linear";
+    public static String VISUALIZER_OPTION_LINEAR_MIN_SPEED = "platform.visualizer.color.linear.min.speed";
+    public static String VISUALIZER_OPTION_SPINDLE_MAX_SPEED = "platform.visualizer.color.spindle.max.speed";
+    public static String VISUALIZER_OPTION_SPINDLE_MIN_SPEED = "platform.visualizer.color.spindle.min.speed";
     public static String VISUALIZER_OPTION_RAPID = "platform.visualizer.color.rapid";
     public static String VISUALIZER_OPTION_ARC = "platform.visualizer.color.arc";
     public static String VISUALIZER_OPTION_PLUNGE = "platform.visualizer.color.plunge";
@@ -103,6 +112,9 @@ public class VisualizerOptions extends ArrayList<Option<?>> {
     public static String VISUALIZER_OPTION_BOUNDARY_INVERT_DESC = "platform.visualizer.boundary.invert.desc";
 
     public VisualizerOptions() {
+        add(getOption(VISUALIZER_OPTION_NEWT, Localization.getString(VISUALIZER_OPTION_NEWT_DESC), false));
+        add(getOption(VISUALIZER_OPTION_NEWT_SAMPLES, Localization.getString(VISUALIZER_OPTION_NEWT_SAMPLES_DESC), 4));
+
         // GcodeRenderer clear color
         add(getOption(VISUALIZER_OPTION_BG, "", new Color(220,235,255)));
 
@@ -113,10 +125,13 @@ public class VisualizerOptions extends ArrayList<Option<?>> {
         // GcodeModel renderable
         add(getOption(VISUALIZER_OPTION_MODEL, Localization.getString(VISUALIZER_OPTION_MODEL_DESC), true));
         add(getOption(VISUALIZER_OPTION_LINEAR, "", new Color(0,0,158)));
+        add(getOption(VISUALIZER_OPTION_LINEAR_MIN_SPEED, "", new Color(204,255,255)));
+        add(getOption(VISUALIZER_OPTION_SPINDLE_MAX_SPEED, "", new Color(0,0,158)));
+        add(getOption(VISUALIZER_OPTION_SPINDLE_MIN_SPEED, "", new Color(204,255,255)));
         add(getOption(VISUALIZER_OPTION_RAPID, "", new Color(204,204,0)));
         add(getOption(VISUALIZER_OPTION_ARC, "", new Color(178,34,34)));
         add(getOption(VISUALIZER_OPTION_PLUNGE, "", new Color(0,100,0)));
-        add(getOption(VISUALIZER_OPTION_COMPLETE, "", new Color(190,190,190)));
+        add(getOption(VISUALIZER_OPTION_COMPLETE, "", new Color(190,190,190, 200)));
 
         // Highlight renderable
         add(getOption(VISUALIZER_OPTION_HIGHLIGHT, Localization.getString(VISUALIZER_OPTION_HIGHLIGHT_DESC), true));
@@ -155,6 +170,10 @@ public class VisualizerOptions extends ArrayList<Option<?>> {
         add(getOption(VISUALIZER_OPTION_DOWEL_PREVIEW, Localization.getString(VISUALIZER_OPTION_DOWEL_PREVIEW_DESC), true));
     }
 
+    private Option<Integer> getOption(String op, String desc, int defaultValue) {
+        return new Option<>(op, Localization.getString(op), desc, getIntegerOption(op, defaultValue));
+    }
+
     private Option<Color> getOption(String op, String description, Color def) {
         return new Option<>(op, Localization.getString(op), description, getColorOption(op, def));
     }
@@ -179,6 +198,10 @@ public class VisualizerOptions extends ArrayList<Option<?>> {
         ret[2] = c.getBlue()/255f;
         ret[3] = c.getAlpha()/255f;
         return ret;
+    }
+
+    public static int getIntegerOption(String option, int defaultValue) {
+        return NbPreferences.forModule(VisualizerOptions.class).getInt(option, defaultValue);
     }
 
     public static Color getColorOption(String option, Color defaultColor) {

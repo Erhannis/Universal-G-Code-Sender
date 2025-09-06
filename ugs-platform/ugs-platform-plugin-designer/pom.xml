@@ -65,13 +65,6 @@
             <version>${batik.version}</version>
         </dependency>
 
-        <!-- For special graphical components -->
-        <dependency>
-            <groupId>com.formdev</groupId>
-            <artifactId>jide-oss</artifactId>
-            <version>${ugs.jide.version}</version>
-        </dependency>
-
         <!-- UGS dependencies -->
         <dependency>
             <groupId>${project.groupId}</groupId>

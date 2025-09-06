@@ -1,8 +1,28 @@
+/*
+    Copyright 2021-2024 Will Winder
+
+    This file is part of Universal Gcode Sender (UGS).
+
+    UGS is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    UGS is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with UGS.  If not, see <http://www.gnu.org/licenses/>.
+ */
 package com.willwinder.ugs.nbp.designer.io.gcode.toolpaths;
 
 import com.willwinder.ugs.nbp.designer.entities.cuttable.Cuttable;
 import com.willwinder.ugs.nbp.designer.io.gcode.path.GcodePath;
+import com.willwinder.ugs.nbp.designer.io.gcode.path.Segment;
 import com.willwinder.ugs.nbp.designer.io.gcode.path.SegmentType;
+import com.willwinder.ugs.nbp.designer.model.Settings;
 import com.willwinder.universalgcodesender.model.PartialPosition;
 import com.willwinder.universalgcodesender.model.UnitUtils;
 
@@ -16,19 +36,37 @@ import java.awt.geom.Point2D;
 public class DrillCenterToolPath extends AbstractToolPath {
     private final Cuttable source;
 
-    public DrillCenterToolPath(Cuttable source) {
+    public DrillCenterToolPath(Settings settings, Cuttable source) {
+        super(settings);
         this.source = source;
     }
 
-    @Override
-    public GcodePath toGcodePath() {
-        PartialPosition centerPosition = getCenterPosition();
-        GcodePath gcodePath = new GcodePath();
-        addSafeHeightSegmentTo(gcodePath, centerPosition);
+    private void addDepthSegment(GcodePath gcodePath, double depth) {
+        gcodePath.addSegment(SegmentType.POINT, PartialPosition.builder(UnitUtils.Units.MM)
+                .setZ(depth)
+                .build());
+    }
 
-        double currentDepth = getStartDepth() - getDepthPerPass();
+    private PartialPosition getCenterPosition() {
+        Point2D center = source.getCenter();
+        return PartialPosition.builder(UnitUtils.Units.MM)
+                .setX(center.getX())
+                .setY(center.getY())
+                .build();
+    }
+
+    @Override
+    public void appendGcodePath(GcodePath gcodePath, Settings settings) {
+        PartialPosition centerPosition = getCenterPosition();
+        addSafeHeightSegmentTo(gcodePath, centerPosition);
+        if (source.getSpindleSpeed() > 0) {
+            gcodePath.addSegment(new Segment(SegmentType.SEAM, null, null, (int) Math.round(settings.getMaxSpindleSpeed() * (source.getSpindleSpeed() / 100d)), null));
+        }
+        addDepthSegment(gcodePath, getStartDepth());
+
+        double currentDepth = getStartDepth();
         while (currentDepth < getTargetDepth()) {
-            currentDepth += getDepthPerPass();
+            currentDepth += settings.getDepthPerPass();
             if (currentDepth > getTargetDepth()) {
                 currentDepth = getTargetDepth();
             }
@@ -42,22 +80,5 @@ public class DrillCenterToolPath extends AbstractToolPath {
         }
 
         addSafeHeightSegment(gcodePath);
-        return gcodePath;
-    }
-
-    private void addDepthSegment(GcodePath gcodePath, double depth) {
-        gcodePath.addSegment(SegmentType.POINT, PartialPosition.builder()
-                .setZ(depth)
-                .setUnits(UnitUtils.Units.MM)
-                .build());
-    }
-
-    private PartialPosition getCenterPosition() {
-        Point2D center = source.getCenter();
-        return PartialPosition.builder()
-                .setX(center.getX())
-                .setY(center.getY())
-                .setUnits(UnitUtils.Units.MM)
-                .build();
     }
 }

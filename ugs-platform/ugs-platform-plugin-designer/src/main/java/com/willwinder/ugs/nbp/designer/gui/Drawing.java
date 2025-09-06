@@ -1,5 +1,5 @@
 /*
-    Copyright 2021 Will Winder
+    Copyright 2021-2024 Will Winder
 
     This file is part of Universal Gcode Sender (UGS).
 
@@ -20,6 +20,7 @@ package com.willwinder.ugs.nbp.designer.gui;
 
 import com.google.common.collect.Sets;
 import com.willwinder.ugs.nbp.designer.Throttler;
+import com.willwinder.ugs.nbp.designer.entities.Anchor;
 import com.willwinder.ugs.nbp.designer.entities.Entity;
 import com.willwinder.ugs.nbp.designer.entities.EntityGroup;
 import com.willwinder.ugs.nbp.designer.entities.controls.Control;
@@ -30,7 +31,6 @@ import com.willwinder.ugs.nbp.designer.entities.controls.CreateTextControl;
 import com.willwinder.ugs.nbp.designer.entities.controls.EditTextControl;
 import com.willwinder.ugs.nbp.designer.entities.controls.GridControl;
 import com.willwinder.ugs.nbp.designer.entities.controls.HighlightModelControl;
-import com.willwinder.ugs.nbp.designer.entities.controls.Location;
 import com.willwinder.ugs.nbp.designer.entities.controls.MoveControl;
 import com.willwinder.ugs.nbp.designer.entities.controls.ResizeControl;
 import com.willwinder.ugs.nbp.designer.entities.controls.RotationControl;
@@ -38,27 +38,29 @@ import com.willwinder.ugs.nbp.designer.entities.controls.SelectionControl;
 import com.willwinder.ugs.nbp.designer.entities.controls.ZoomControl;
 import com.willwinder.ugs.nbp.designer.logic.Controller;
 import com.willwinder.universalgcodesender.utils.ThreadHelper;
+import static java.awt.RenderingHints.KEY_ALPHA_INTERPOLATION;
+import static java.awt.RenderingHints.KEY_ANTIALIASING;
+import static java.awt.RenderingHints.KEY_RENDERING;
+import static java.awt.RenderingHints.KEY_TEXT_ANTIALIASING;
 
 import javax.swing.JPanel;
 import java.awt.Dimension;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
+import java.awt.Rectangle;
 import java.awt.RenderingHints;
 import java.awt.Shape;
+import java.awt.dnd.DnDConstants;
+import java.awt.dnd.DropTarget;
 import java.awt.geom.AffineTransform;
 import java.awt.geom.Point2D;
 import java.awt.geom.Rectangle2D;
 import java.awt.image.BufferedImage;
+import java.io.Serial;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Set;
-import java.util.stream.Collectors;
-
-import static java.awt.RenderingHints.KEY_ALPHA_INTERPOLATION;
-import static java.awt.RenderingHints.KEY_ANTIALIASING;
-import static java.awt.RenderingHints.KEY_RENDERING;
-import static java.awt.RenderingHints.KEY_TEXT_ANTIALIASING;
 
 /**
  * @author Joacim Breiler
@@ -66,17 +68,22 @@ import static java.awt.RenderingHints.KEY_TEXT_ANTIALIASING;
 public class Drawing extends JPanel {
 
     public static final double MIN_SCALE = 0.05;
+    @Serial
     private static final long serialVersionUID = 1298712398723987873L;
-    private static final int MARGIN = 100;
     private final transient EntityGroup globalRoot;
     private final transient EntityGroup entitiesRoot;
     private final transient EntityGroup controlsRoot;
     private final transient Set<DrawingListener> listeners = Sets.newConcurrentHashSet();
     private final transient Throttler refreshThrottler;
+    private final transient Rectangle2D currentBounds = new Rectangle(0, 0, 8, 8);
     private double scale;
+    private Point2D.Double position = new Point2D.Double();
+    private Dimension oldMinimumSize;
+    private transient DropHandler dropHandler;
+    private transient DropTarget dropTarget;
 
     public Drawing(Controller controller) {
-        refreshThrottler = new Throttler(this::refresh, 2000);
+        refreshThrottler = new Throttler(this::refresh, 1000);
 
         globalRoot = new EntityGroup();
         globalRoot.addChild(new GridControl(controller));
@@ -88,17 +95,17 @@ public class Drawing extends JPanel {
 
         controlsRoot = new EntityGroup();
         globalRoot.addChild(controlsRoot);
-        controlsRoot.addChild(new ResizeControl(controller, Location.TOP));
-        controlsRoot.addChild(new ResizeControl(controller, Location.LEFT));
-        controlsRoot.addChild(new ResizeControl(controller, Location.RIGHT));
-        controlsRoot.addChild(new ResizeControl(controller, Location.BOTTOM));
-        controlsRoot.addChild(new ResizeControl(controller, Location.BOTTOM_LEFT));
-        controlsRoot.addChild(new ResizeControl(controller, Location.BOTTOM_RIGHT));
-        controlsRoot.addChild(new ResizeControl(controller, Location.TOP_LEFT));
-        controlsRoot.addChild(new ResizeControl(controller, Location.TOP_RIGHT));
+        controlsRoot.addChild(new ResizeControl(controller, Anchor.TOP_CENTER));
+        controlsRoot.addChild(new ResizeControl(controller, Anchor.LEFT_CENTER));
+        controlsRoot.addChild(new ResizeControl(controller, Anchor.RIGHT_CENTER));
+        controlsRoot.addChild(new ResizeControl(controller, Anchor.BOTTOM_CENTER));
+        controlsRoot.addChild(new ResizeControl(controller, Anchor.BOTTOM_LEFT));
+        controlsRoot.addChild(new ResizeControl(controller, Anchor.BOTTOM_RIGHT));
+        controlsRoot.addChild(new ResizeControl(controller, Anchor.TOP_LEFT));
+        controlsRoot.addChild(new ResizeControl(controller, Anchor.TOP_RIGHT));
         controlsRoot.addChild(new HighlightModelControl(controller.getSelectionManager()));
         controlsRoot.addChild(new MoveControl(controller));
-        controlsRoot.addChild(new RotationControl(controller.getSelectionManager()));
+        controlsRoot.addChild(new RotationControl(controller));
         controlsRoot.addChild(new SelectionControl(controller));
         controlsRoot.addChild(new CreatePointControl(controller));
         controlsRoot.addChild(new CreateRectangleControl(controller));
@@ -107,8 +114,22 @@ public class Drawing extends JPanel {
         controlsRoot.addChild(new EditTextControl(controller));
         controlsRoot.addChild(new ZoomControl(controller));
 
+        setFocusable(true);
         setBackground(Colors.BACKGROUND);
         setScale(2);
+    }
+
+    @Override
+    public void addNotify() {
+        super.addNotify();
+        dropHandler = new DropHandler();
+        dropTarget = new DropTarget(this, DnDConstants.ACTION_COPY_OR_MOVE, dropHandler, true);
+    }
+
+    @Override
+    public void removeNotify() {
+        super.removeNotify();
+        dropTarget.removeDropTargetListener(dropHandler);
     }
 
     public BufferedImage getImage() {
@@ -153,8 +174,8 @@ public class Drawing extends JPanel {
     }
 
     private void recursiveCollectEntities(Entity shape, List<Entity> result) {
-        if (shape instanceof EntityGroup) {
-            List<Entity> shapes = ((EntityGroup) shape).getChildren();
+        if (shape instanceof EntityGroup entityGroup) {
+            List<Entity> shapes = entityGroup.getChildren();
             shapes.forEach(s -> recursiveCollectEntities(s, result));
         } else {
             result.add(shape);
@@ -194,8 +215,8 @@ public class Drawing extends JPanel {
 
     private void removeEntitiesRecursively(EntityGroup parent, List<Entity> entities) {
         parent.getChildren().forEach(child -> {
-            if (child instanceof EntityGroup) {
-                removeEntitiesRecursively((EntityGroup) child, entities);
+            if (child instanceof EntityGroup entityGroup) {
+                removeEntitiesRecursively(entityGroup, entities);
             }
         });
 
@@ -216,13 +237,15 @@ public class Drawing extends JPanel {
         if (this.scale != newScale) {
             this.scale = newScale;
             notifyListeners(DrawingEvent.SCALE_CHANGED);
+            refresh();
         }
     }
 
     @Override
     public Dimension getMinimumSize() {
-        Rectangle2D bounds = globalRoot.getBounds();
-        return new Dimension((int) (bounds.getMaxX() * scale) + (MARGIN * 2), (int) (bounds.getMaxY() * scale) + (MARGIN * 2));
+        int width = (int) (currentBounds.getWidth() );
+        int height = (int) (currentBounds.getHeight());
+        return new Dimension(width, height);
     }
 
     @Override
@@ -230,11 +253,14 @@ public class Drawing extends JPanel {
         return getMinimumSize();
     }
 
-    private void refresh() {
+    public void refresh() {
         repaint();
+        globalRoot.invalidateBounds();
+        updateBounds();
         Dimension minimumSize = getMinimumSize();
-        firePropertyChange("minimumSize", minimumSize.width, minimumSize.height);
-        firePropertyChange("preferredSize", minimumSize.width, minimumSize.height);
+        firePropertyChange("minimumSize", oldMinimumSize, minimumSize);
+        firePropertyChange("preferredSize", oldMinimumSize, minimumSize);
+        oldMinimumSize = minimumSize;
         revalidate();
     }
 
@@ -245,8 +271,8 @@ public class Drawing extends JPanel {
     public AffineTransform getTransform() {
         AffineTransform transform = AffineTransform.getScaleInstance(1, -1);
         transform.translate(0, -getHeight());
-        transform.translate(MARGIN, MARGIN);
         transform.scale(scale, scale);
+        transform.translate(-position.x, -position.y);
         return transform;
     }
 
@@ -258,10 +284,34 @@ public class Drawing extends JPanel {
         return controlsRoot.getAllChildren().stream()
                 .filter(Control.class::isInstance)
                 .map(Control.class::cast)
-                .collect(Collectors.toList());
+                .toList();
     }
 
     public void clear() {
         entitiesRoot.removeAll();
+    }
+
+    @Override
+    public Rectangle getBounds() {
+        updateBounds();
+        return currentBounds.getBounds();
+    }
+
+    private void updateBounds() {
+        Rectangle2D bounds = globalRoot.getBounds();
+        double minX = (bounds.getMinX()) * scale;
+        double minY = (bounds.getMinY()) * scale;
+        double maxX = (bounds.getMaxX()) * scale;
+        double maxY = (bounds.getMaxY()) * scale;
+        currentBounds.setRect(minX, minY, maxX - minX, maxY - minY);
+    }
+
+    public void setPosition(double x, double y) {
+        position = new Point2D.Double(x / scale, y / scale);
+        refresh();
+    }
+
+    public Point2D.Double getPosition() {
+        return new Point2D.Double(position.x * scale, position.y * scale);
     }
 }

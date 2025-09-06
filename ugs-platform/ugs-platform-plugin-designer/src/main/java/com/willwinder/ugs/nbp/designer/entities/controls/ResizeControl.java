@@ -21,6 +21,7 @@ package com.willwinder.ugs.nbp.designer.entities.controls;
 import com.willwinder.ugs.nbp.designer.Utils;
 import com.willwinder.ugs.nbp.designer.actions.ResizeAction;
 import com.willwinder.ugs.nbp.designer.actions.UndoManager;
+import com.willwinder.ugs.nbp.designer.entities.Anchor;
 import com.willwinder.ugs.nbp.designer.entities.Entity;
 import com.willwinder.ugs.nbp.designer.entities.EntityEvent;
 import com.willwinder.ugs.nbp.designer.entities.EventType;
@@ -51,41 +52,50 @@ public class ResizeControl extends AbstractControl {
     public static final int SIZE = 8;
     public static final int MARGIN = 6;
     public static final double ARC_SIZE = 1d;
-    private final Location location;
+
     private final RoundRectangle2D.Double shape;
+    private final Controller controller;
+    private final Anchor anchor;
     private AffineTransform transform = new AffineTransform();
     private Point2D.Double startOffset = new Point2D.Double();
     private boolean isHovered;
     private Size originalSize;
     private Point2D originalPosition;
 
-    public ResizeControl(Controller controller, Location location) {
+    public ResizeControl(Controller controller, Anchor anchor) {
         super(controller.getSelectionManager());
-        this.location = location;
+        this.controller = controller;
         this.shape = new RoundRectangle2D.Double(0, 0, SIZE, SIZE, ARC_SIZE, ARC_SIZE);
+        this.anchor = anchor;
     }
 
     @Override
     public Optional<Cursor> getHoverCursor() {
         Cursor cursor = null;
-        if (location == Location.TOP_LEFT) {
+        if (anchor == Anchor.BOTTOM_RIGHT) {
             cursor = new Cursor(Cursor.NW_RESIZE_CURSOR);
-        } else if (location == Location.TOP_RIGHT) {
+        } else if (anchor == Anchor.BOTTOM_LEFT) {
             cursor = new Cursor(Cursor.NE_RESIZE_CURSOR);
-        } else if (location == Location.BOTTOM_LEFT) {
+        } else if (anchor == Anchor.TOP_RIGHT) {
             cursor = new Cursor(Cursor.SW_RESIZE_CURSOR);
-        } else if (location == Location.BOTTOM_RIGHT) {
+        } else if (anchor == Anchor.TOP_LEFT) {
             cursor = new Cursor(Cursor.SE_RESIZE_CURSOR);
-        } else if (location == Location.BOTTOM) {
+        } else if (anchor == Anchor.TOP_CENTER) {
             cursor = new Cursor(Cursor.S_RESIZE_CURSOR);
-        } else if (location == Location.TOP) {
+        } else if (anchor == Anchor.BOTTOM_CENTER) {
             cursor = new Cursor(Cursor.N_RESIZE_CURSOR);
-        } else if (location == Location.LEFT) {
+        } else if (anchor == Anchor.RIGHT_CENTER) {
             cursor = new Cursor(Cursor.W_RESIZE_CURSOR);
-        } else if (location == Location.RIGHT) {
+        } else if (anchor == Anchor.LEFT_CENTER) {
             cursor = new Cursor(Cursor.E_RESIZE_CURSOR);
         }
         return Optional.ofNullable(cursor);
+    }
+
+    @Override
+    public boolean isWithin(Point2D point) {
+        return !controller.getSelectionManager().isEmpty() &&
+                super.isWithin(point);
     }
 
     @Override
@@ -120,8 +130,7 @@ public class ResizeControl extends AbstractControl {
 
     @Override
     public void onEvent(EntityEvent entityEvent) {
-        if (entityEvent instanceof MouseEntityEvent && entityEvent.getTarget() == this) {
-            MouseEntityEvent mouseShapeEvent = (MouseEntityEvent) entityEvent;
+        if (entityEvent instanceof MouseEntityEvent mouseShapeEvent && entityEvent.getTarget() == this) {
             Point2D mousePosition = mouseShapeEvent.getCurrentMousePosition();
 
             if (mouseShapeEvent.getType() == EventType.MOUSE_PRESSED) {
@@ -131,11 +140,11 @@ public class ResizeControl extends AbstractControl {
             } else if (mouseShapeEvent.getType() == EventType.MOUSE_DRAGGED) {
                 Size size = getSelectionManager().getSize();
                 Size newSize = calculateNewSize(size, mousePosition);
-                ResizeUtils.performScaling(getSelectionManager(), location, size, newSize);
+                ResizeUtils.performScaling(getSelectionManager(), anchor, size, newSize);
             } else if (mouseShapeEvent.getType() == EventType.MOUSE_RELEASED) {
                 getSelectionManager().setPosition(originalPosition);
                 Size newSize = calculateNewSize(originalSize, mousePosition);
-                addUndoAction(getSelectionManager(), location, originalSize, newSize);
+                addUndoAction(getSelectionManager(), anchor, originalSize, newSize);
             } else if (mouseShapeEvent.getType() == EventType.MOUSE_IN) {
                 isHovered = true;
             } else if (mouseShapeEvent.getType() == EventType.MOUSE_OUT) {
@@ -144,16 +153,16 @@ public class ResizeControl extends AbstractControl {
         }
     }
 
-    private void addUndoAction(Entity target, Location location, Size originalSize, Size newSize) {
+    private void addUndoAction(Entity target, Anchor anchor, Size originalSize, Size newSize) {
         UndoManager undoManager = ControllerFactory.getUndoManager();
         if (undoManager != null) {
             List<Entity> entityList = new ArrayList<>();
-            if (target instanceof SelectionManager) {
-                entityList.addAll(((SelectionManager) target).getSelection());
+            if (target instanceof SelectionManager selectionManager) {
+                entityList.addAll(selectionManager.getSelection());
             } else {
                 entityList.add(target);
             }
-            ResizeAction resizeAction = new ResizeAction(entityList, location, originalSize, newSize);
+            ResizeAction resizeAction = new ResizeAction(entityList, anchor, originalSize, newSize);
             resizeAction.redo();
             undoManager.addAction(resizeAction);
         }
@@ -172,21 +181,21 @@ public class ResizeControl extends AbstractControl {
         Rectangle2D bounds = getSelectionManager().getRelativeShape().getBounds2D();
         t.translate(bounds.getX(), bounds.getY());
 
-        if (location == Location.BOTTOM_RIGHT) {
+        if (anchor == Anchor.TOP_LEFT) {
             t.translate(bounds.getWidth() + margin, -margin);
-        } else if (location == Location.TOP_LEFT) {
+        } else if (anchor == Anchor.BOTTOM_RIGHT) {
             t.translate(-margin, bounds.getHeight() + margin);
-        } else if (location == Location.TOP_RIGHT) {
+        } else if (anchor == Anchor.BOTTOM_LEFT) {
             t.translate(bounds.getWidth() + margin, bounds.getHeight() + margin);
-        } else if (location == Location.BOTTOM_LEFT) {
+        } else if (anchor == Anchor.TOP_RIGHT) {
             t.translate(-margin, -margin);
-        } else if (location == Location.TOP) {
+        } else if (anchor == Anchor.BOTTOM_CENTER) {
             t.translate(bounds.getWidth() / 2d, bounds.getHeight() + margin);
-        } else if (location == Location.BOTTOM) {
+        } else if (anchor == Anchor.TOP_CENTER) {
             t.translate(bounds.getWidth() / 2d, -margin);
-        } else if (location == Location.LEFT) {
+        } else if (anchor == Anchor.RIGHT_CENTER) {
             t.translate(-margin, bounds.getHeight() / 2d);
-        } else if (location == Location.RIGHT) {
+        } else if (anchor == Anchor.LEFT_CENTER) {
             t.translate(bounds.getWidth() + margin, bounds.getHeight() / 2d);
         }
 
@@ -211,21 +220,21 @@ public class ResizeControl extends AbstractControl {
 
     private Point2D getScaleFactor(double deltaX, double deltaY) {
         Point2D scaleFactor = new Point2D.Double(0, 0);
-        if (location == Location.BOTTOM_LEFT) {
+        if (anchor == Anchor.TOP_RIGHT) {
             scaleFactor.setLocation(1d - deltaX, 1d - deltaX);
-        } else if (location == Location.TOP_RIGHT) {
+        } else if (anchor == Anchor.BOTTOM_LEFT) {
             scaleFactor.setLocation(1d + deltaX, 1d + deltaX);
-        } else if (location == Location.BOTTOM_RIGHT) {
+        } else if (anchor == Anchor.TOP_LEFT) {
             scaleFactor.setLocation(1d + deltaX, 1d + deltaX);
-        } else if (location == Location.TOP_LEFT) {
+        } else if (anchor == Anchor.BOTTOM_RIGHT) {
             scaleFactor.setLocation(1d - deltaX, 1d - deltaX);
-        } else if (location == Location.LEFT) {
+        } else if (anchor == Anchor.RIGHT_CENTER) {
             scaleFactor.setLocation(1d - deltaX, 1d);
-        } else if (location == Location.BOTTOM) {
+        } else if (anchor == Anchor.TOP_CENTER) {
             scaleFactor.setLocation(1d, 1d - deltaY);
-        } else if (location == Location.TOP) {
+        } else if (anchor == Anchor.BOTTOM_CENTER) {
             scaleFactor.setLocation(1d, 1d + deltaY);
-        } else if (location == Location.RIGHT) {
+        } else if (anchor == Anchor.LEFT_CENTER) {
             scaleFactor.setLocation(1d + deltaX, 1d);
         }
         return scaleFactor;

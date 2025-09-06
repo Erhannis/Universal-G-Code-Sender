@@ -71,7 +71,7 @@ public class CommandProcessorList implements CommandProcessor, Iterable<CommandP
         GcodeState ret = state;
 
         // Add command get meta doesn't update the state, so we need to do that manually.
-        Collection<GcodeParser.GcodeMeta> metaObjects = GcodeParserUtils.processCommand(command, 0, state);
+        Collection<GcodeParser.GcodeMeta> metaObjects = GcodeParserUtils.processCommand(command, state.commandNumber, state);
         if (metaObjects != null) {
             for (GcodeParser.GcodeMeta c : metaObjects) {
                 if (c.state != null) {

@@ -1,5 +1,5 @@
 /*
-    Copyright 2019 Will Winder
+    Copyright 2019-2024 Will Winder
 
     This file is part of Universal Gcode Sender (UGS).
 
@@ -20,7 +20,6 @@ package com.willwinder.universalgcodesender.communicator;
 
 import com.willwinder.universalgcodesender.connection.Connection;
 import com.willwinder.universalgcodesender.connection.ConnectionDriver;
-import com.willwinder.universalgcodesender.connection.IConnectionListener;
 import com.willwinder.universalgcodesender.types.GcodeCommand;
 import com.willwinder.universalgcodesender.utils.IGcodeStreamReader;
 
@@ -29,10 +28,14 @@ import java.io.IOException;
 /**
  * An interface for describing a communicator, responsible for handling gcode command
  * queues and its streaming to a hardware connection.
+ * <p>
+ * To make ensure the performance of the stream, the events dispatched from this service should
+ * be sent using a separate queue or else any slow UI operations may starve the command
+ * stream to the service.
  *
  * @author Joacim Breiler
  */
-public interface ICommunicator extends IConnectionListener {
+public interface ICommunicator {
 
     /**
      * Add command to the command buffer outside file mode. These commands will be sent
@@ -70,7 +73,7 @@ public interface ICommunicator extends IConnectionListener {
 
     /**
      * Returns if there is any active commands that has been sent or is being processed
-     * by the hardware. These includes streams or single queued commands.
+     * by the hardware. These include streams or single queued commands.
      *
      * @return true if there is active commands being processed
      */

@@ -3,10 +3,17 @@ package com.willwinder.universalgcodesender.gcode.fixtures;
 import com.google.common.base.Joiner;
 import com.willwinder.universalgcodesender.gcode.DefaultCommandCreator;
 import com.willwinder.universalgcodesender.gcode.GcodeParser;
-import com.willwinder.universalgcodesender.gcode.processors.*;
+import com.willwinder.universalgcodesender.gcode.processors.ArcExpander;
+import com.willwinder.universalgcodesender.gcode.processors.CommentProcessor;
+import com.willwinder.universalgcodesender.gcode.processors.EmptyLineRemoverProcessor;
+import com.willwinder.universalgcodesender.gcode.processors.LineSplitter;
+import com.willwinder.universalgcodesender.gcode.processors.MeshLeveler;
+import com.willwinder.universalgcodesender.gcode.processors.RunFromProcessor;
+import com.willwinder.universalgcodesender.gcode.processors.WhitespaceProcessor;
 import com.willwinder.universalgcodesender.gcode.util.GcodeParserUtils;
+import com.willwinder.universalgcodesender.i18n.Localization;
 import com.willwinder.universalgcodesender.model.Position;
-import com.willwinder.universalgcodesender.model.UnitUtils;
+import static com.willwinder.universalgcodesender.model.UnitUtils.Units.MM;
 import com.willwinder.universalgcodesender.types.GcodeCommand;
 import com.willwinder.universalgcodesender.utils.GcodeStreamReader;
 import com.willwinder.universalgcodesender.utils.GcodeStreamWriter;
@@ -17,19 +24,24 @@ import org.apache.commons.io.IOUtils;
 import org.junit.Assert;
 import org.junit.Test;
 
-import java.io.*;
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.PrintStream;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URL;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.text.DecimalFormat;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.concurrent.Callable;
-
-import static com.willwinder.universalgcodesender.model.UnitUtils.Units.MM;
 
 /**
  * A simple framework where you can specify one or more gcode files in the /gcode/fixtures/ test-resources folder
@@ -69,13 +81,14 @@ public class FixturesTest {
             GcodeParser gcp = new GcodeParser();
 
             gcp.addCommandProcessor(new CommentProcessor());
-            gcp.addCommandProcessor(new ArcExpander(true, 0.1));
+            gcp.addCommandProcessor(new WhitespaceProcessor());
+            gcp.addCommandProcessor(new ArcExpander(true, 0.1, new DecimalFormat("#.####", Localization.dfs)));
             gcp.addCommandProcessor(new LineSplitter(1));
-            Position grid[][] = {
+            Position[][] grid = {
                     { new Position(-5,-5,0, MM), new Position(-5,35,0, MM) },
                     { new Position(35,-5,0, MM), new Position(35,35,0, MM) }
             };
-            gcp.addCommandProcessor(new MeshLeveler(0, grid, UnitUtils.Units.MM));
+            gcp.addCommandProcessor(new MeshLeveler(0, grid));
             return gcp;
         });
 
@@ -86,6 +99,27 @@ public class FixturesTest {
         runAllFixturesInPath("./gcode/fixtures/run-from/", "RunFrom", () -> {
             GcodeParser gcp = new GcodeParser();
             gcp.addCommandProcessor(new RunFromProcessor(17));
+            return gcp;
+        });
+    }
+
+    @Test
+    public void testRemoveCommentsAndEmptyLinesFixtures() throws Exception {
+        runAllFixturesInPath("./gcode/fixtures/comments/", "EmptyLines", () -> {
+            GcodeParser gcp = new GcodeParser();
+            gcp.addCommandProcessor(new CommentProcessor());
+            gcp.addCommandProcessor(new EmptyLineRemoverProcessor());
+            gcp.addCommandProcessor(new LineSplitter(1));
+            return gcp;
+        });
+    }
+
+    @Test
+    public void testRemoveCommentsFixtures() throws Exception {
+        runAllFixturesInPath("./gcode/fixtures/comments/", "Comments", () -> {
+            GcodeParser gcp = new GcodeParser();
+            gcp.addCommandProcessor(new CommentProcessor());
+            gcp.addCommandProcessor(new LineSplitter(1));
             return gcp;
         });
     }
@@ -103,12 +137,11 @@ public class FixturesTest {
     }
 
 
-
     public void runFixture(String basePath, String fixtureName, String parserName, GcodeParser gcp) throws Exception {
         String inputFixture = basePath + fixtureName + ".input.nc";
         String streamOutputFixture = basePath + "out" + parserName + "/" + fixtureName + ".stream_output.nc";
         String outputxFixture = basePath + "out" + parserName + "/" + fixtureName  + ".parsed_output.nc";
-        System.out.printf("Running fixture %s...%n", inputFixture);
+        System.out.printf("Running fixture %s -> %s...%n", inputFixture, outputxFixture);
 
         // write parsed output to temp file
         Path output = Files.createTempFile(fixtureName, "output");
@@ -155,7 +188,6 @@ public class FixturesTest {
         } else {
             initializeFixture(name, fixtureResourceName, testLines);
         }
-
     }
 
     private void checkFixture(String fixtureResourceName, Iterator<String> testLines) throws URISyntaxException, IOException {
@@ -175,8 +207,6 @@ public class FixturesTest {
         if (testLines.hasNext()) {
             Assert.fail("Generated gcode for " + fixtureResourceName + " has more lines than the fixture:\n  " + Joiner.on("\n  ").join(testLines));
         }
-
-
     }
 
     // just a quick hack to initialize not existing fixtures
@@ -188,13 +218,13 @@ public class FixturesTest {
         System.out.println("-------------------------------------------------");
         System.out.println("| WARNING:  " + fixtureResourceName + " does not exist, it will be created");
         System.out.println("|  This should only happen if you made a new fixture or intentionally ");
-        System.out.println("|  the old one to update it.");
+        System.out.println("|  removed the old one to update it.");
         System.out.println("|  It will be written to:");
         System.out.println("|    " + dstFile);
         System.out.println("|    (if this is not correct, move it into the resource folder)");
         System.out.println("-------------------------------------------------");
 
-        PrintStream resourceFile = new PrintStream(dstFile);
+        PrintStream resourceFile = new PrintStream(dstFile, StandardCharsets.UTF_8);
         testLines.forEachRemaining(resourceFile::println);
         resourceFile.close();
     }

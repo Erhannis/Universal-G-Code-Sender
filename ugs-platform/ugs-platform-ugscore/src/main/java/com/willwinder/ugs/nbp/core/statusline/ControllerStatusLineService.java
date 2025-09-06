@@ -1,5 +1,5 @@
 /*
-    Copyright 2021 Will Winder
+    Copyright 2021-2023 Will Winder
 
     This file is part of Universal Gcode Sender (UGS).
 
@@ -63,6 +63,7 @@ public class ControllerStatusLineService implements StatusLineElementProvider, U
 
     private void updateLabel() {
         label.setText(Utils.getControllerStateText(backend.getControllerState()));
+        label.setForeground(Utils.getControllerStateForegroundColor(backend.getControllerState()));
         label.setBackground(Utils.getControllerStateBackgroundColor(backend.getControllerState()));
     }
 }

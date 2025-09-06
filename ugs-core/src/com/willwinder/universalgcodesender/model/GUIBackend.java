@@ -1,5 +1,5 @@
 /*
-    Copyright 2015-2023 Will Winder
+    Copyright 2015-2024 Will Winder
 
     This file is part of Universal Gcode Sender (UGS).
 
@@ -20,11 +20,11 @@ package com.willwinder.universalgcodesender.model;
 
 import com.google.common.io.Files;
 import com.willwinder.universalgcodesender.IController;
-import com.willwinder.universalgcodesender.gcode.ICommandCreator;
 import com.willwinder.universalgcodesender.gcode.DefaultCommandCreator;
 import com.willwinder.universalgcodesender.gcode.GcodeParser;
 import com.willwinder.universalgcodesender.gcode.GcodeState;
 import com.willwinder.universalgcodesender.gcode.GcodeStats;
+import com.willwinder.universalgcodesender.gcode.ICommandCreator;
 import com.willwinder.universalgcodesender.gcode.processors.CommandProcessor;
 import com.willwinder.universalgcodesender.gcode.processors.CommentProcessor;
 import com.willwinder.universalgcodesender.gcode.processors.DecimalProcessor;
@@ -101,6 +101,18 @@ public class GUIBackend implements BackendAPI {
     /////////////
     // GUI API //
     /////////////
+
+    /**
+     * This allows us to visualize a file without loading a controller profile.
+     */
+    private static void initializeWithFallbackProcessors(GcodeParser parser) {
+        // Comment processor must come first otherwise we try to parse codes
+        // out of the comments, like an f-code when we see "(feed rate is 100)"
+        parser.addCommandProcessor(new CommentProcessor());
+        parser.addCommandProcessor(new WhitespaceProcessor());
+        parser.addCommandProcessor(new M30Processor());
+        parser.addCommandProcessor(new DecimalProcessor(4));
+    }
 
     @Override
     public void addUGSEventListener(UGSEventListener listener) {
@@ -227,18 +239,6 @@ public class GUIBackend implements BackendAPI {
         }
     }
 
-    /**
-     * This allows us to visualize a file without loading a controller profile.
-     */
-    private static void initializeWithFallbackProcessors(GcodeParser parser) {
-        // Comment processor must come first otherwise we try to parse codes
-        // out of the comments, like an f-code when we see "(feed rate is 100)"
-        parser.addCommandProcessor(new CommentProcessor());
-        parser.addCommandProcessor(new WhitespaceProcessor());
-        parser.addCommandProcessor(new M30Processor());
-        parser.addCommandProcessor(new DecimalProcessor(4));
-    }
-
     @Override
     public void sendGcodeCommand(String commandText) throws Exception {
         sendGcodeCommand(false, commandText);
@@ -327,6 +327,11 @@ public class GUIBackend implements BackendAPI {
     }
 
     @Override
+    public void setWorkPosition(PartialPosition position) throws Exception {
+        controller.setWorkPosition(position);
+    }
+
+    @Override
     public Position getMachinePosition() {
         return controller != null ? controller.getControllerStatus().getMachineCoord() : new Position(0, 0, 0, Units.MM);
     }
@@ -358,47 +363,36 @@ public class GUIBackend implements BackendAPI {
     }
 
     @Override
-    public void setGcodeFile(File file) throws Exception {
-        if (gcodeStream != null) {
-            gcodeStream.close();
-        }
-
-        logger.log(Level.INFO, "Setting gcode file.");
-        eventDispatcher.sendUGSEvent(new FileStateEvent(FileState.OPENING_FILE, file.getAbsolutePath()));
-        initGcodeParser();
-        this.gcodeFile = file;
-        processGcodeFile();
-    }
-
-    @Override
     public void unsetGcodeFile() throws Exception {
         if (gcodeStream != null) {
             gcodeStream.close();
         }
+        if (this.processedGcodeFile != null) {
+            eventDispatcher.sendUGSEvent(new FileStateEvent(FileState.FILE_UNLOADED));
+        }
 
-        eventDispatcher.sendUGSEvent(new FileStateEvent(FileState.FILE_UNLOADED, null));
         initGcodeParser();
         this.gcodeFile = null;
+        this.gcodeStream = null;
         this.processedGcodeFile = null;
     }
 
     @Override
     public void reloadGcodeFile() throws Exception {
         logger.log(Level.INFO, "Reloading gcode file.");
-        eventDispatcher.sendUGSEvent(new FileStateEvent(FileState.OPENING_FILE, gcodeFile.getAbsolutePath()));
+        eventDispatcher.sendUGSEvent(new FileStateEvent(FileState.OPENING_FILE));
         processGcodeFile();
     }
 
     private void processGcodeFile() throws Exception {
         this.processedGcodeFile = null;
 
-        eventDispatcher.sendUGSEvent(new FileStateEvent(FileState.FILE_LOADING,
-                this.gcodeFile.getAbsolutePath()));
-
+        eventDispatcher.sendUGSEvent(new FileStateEvent(FileState.FILE_LOADING));
         initializeProcessedLines(true, this.gcodeFile, this.gcp);
-
-        eventDispatcher.sendUGSEvent(new FileStateEvent(FileState.FILE_LOADED,
-                processedGcodeFile.getAbsolutePath()));
+        if (this.processedGcodeFile != null) {
+            gcodeStream = new GcodeStreamReader(this.processedGcodeFile, getCommandCreator());
+        }
+        eventDispatcher.sendUGSEvent(new FileStateEvent(FileState.FILE_LOADED));
     }
 
     @Override
@@ -460,7 +454,7 @@ public class GUIBackend implements BackendAPI {
         logger.log(Level.INFO, String.format("Applying new command processor %s", commandProcessor.getClass().getSimpleName()));
         gcp.addCommandProcessor(commandProcessor);
 
-        if (gcodeFile != null) {
+        if (processedGcodeFile != null) {
             processGcodeFile();
         }
     }
@@ -468,7 +462,6 @@ public class GUIBackend implements BackendAPI {
     @Override
     public void removeCommandProcessor(CommandProcessor commandProcessor) throws Exception {
         gcp.removeCommandProcessor(commandProcessor);
-        processGcodeFile();
 
         if (gcodeFile != null) {
             processGcodeFile();
@@ -482,8 +475,19 @@ public class GUIBackend implements BackendAPI {
     }
 
     @Override
+    public void setGcodeFile(File file) throws Exception {
+        unsetGcodeFile();
+
+        logger.log(Level.INFO, "Setting gcode file. {0}", file.getAbsolutePath());
+
+        this.gcodeFile = file;
+        eventDispatcher.sendUGSEvent(new FileStateEvent(FileState.OPENING_FILE));
+        processGcodeFile();
+    }
+
+    @Override
     public File getProcessedGcodeFile() {
-        logger.log(Level.INFO, String.format("Getting processed gcode file (%s).", this.processedGcodeFile));
+        logger.log(Level.FINEST, String.format("Getting processed gcode file (%s).", this.processedGcodeFile));
         return this.processedGcodeFile;
     }
 
@@ -623,7 +627,8 @@ public class GUIBackend implements BackendAPI {
     @Override
     public boolean canSend() {
         return isIdle() &&
-                this.gcodeFile != null;
+                this.gcodeFile != null &&
+                (controller != null && !controller.isStreaming());
     }
 
     @Override
@@ -664,14 +669,14 @@ public class GUIBackend implements BackendAPI {
         this.controller.toggleCheckMode();
     }
 
+    ///////////////////////
+    // Utility functions //
+    ///////////////////////
+
     @Override
     public void issueSoftReset() throws Exception {
         this.controller.issueSoftReset();
     }
-
-    ///////////////////////
-    // Utility functions //
-    ///////////////////////
 
     @Override
     public void requestParserState() throws Exception {
@@ -707,7 +712,7 @@ public class GUIBackend implements BackendAPI {
                     .append(Localization.getString("firmware.feature.linesToArc")).append(NEW_LINE)
                     .append(Localization.getString("firmware.feature.statusUpdates")).append(NEW_LINE)
                     .append(Localization.getString("firmware.feature.statusUpdateRate"));
-
+            logger.log(Level.SEVERE, "Could not load firmware settings", ex);
             throw new Exception(message.toString(), ex);
         }
     }
@@ -729,11 +734,6 @@ public class GUIBackend implements BackendAPI {
         }
 
         return controller.getCommandCreator();
-    }
-
-    @Override
-    public void setWorkPosition(PartialPosition position) throws Exception {
-        controller.setWorkPosition(position);
     }
 
     @Override
@@ -770,9 +770,10 @@ public class GUIBackend implements BackendAPI {
 
             this.initializeProcessedLines(false, this.gcodeFile, this.gcp);
         } catch (Exception e) {
+            disconnect();
             logger.log(Level.INFO, "Exception in openCommConnection.", e);
             throw new Exception(Localization.getString("mainWindow.error.connection")
-                    + ": " + e.getMessage());
+                    + ": " + e.getMessage(), e);
         }
         return connected;
     }
@@ -793,8 +794,8 @@ public class GUIBackend implements BackendAPI {
                 if (match.matches()) {
                     name = match.group(1);
                 }
-                this.processedGcodeFile =
-                        new File(this.getTempDir(), name + "_ugs_" + System.currentTimeMillis());
+
+                this.processedGcodeFile = new File(this.getTempDir(), name + "_ugs_" + System.currentTimeMillis());
                 try (IGcodeWriter gcw = new GcodeStreamWriter(this.processedGcodeFile)) {
                     this.preprocessAndExportToFile(gcodeParser, startFile, gcw);
                 }
@@ -807,10 +808,5 @@ public class GUIBackend implements BackendAPI {
             long end = System.currentTimeMillis();
             logger.info("Took " + (end - start) + "ms to preprocess");
         }
-    }
-
-    @Override
-    public void sendOverrideCommand(Overrides override) throws Exception {
-        this.controller.sendOverrideCommand(override);
     }
 }

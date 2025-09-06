@@ -1,5 +1,5 @@
 /*
-    Copyright 2021 Will Winder
+    Copyright 2021-2024 Will Winder
 
     This file is part of Universal Gcode Sender (UGS).
 
@@ -19,12 +19,15 @@
 package com.willwinder.ugs.nbp.core.services;
 
 import com.willwinder.universalgcodesender.uielements.components.GcodeFileTypeFilter;
+import com.willwinder.universalgcodesender.uielements.helpers.FilenameFilterAdapter;
+import org.apache.commons.io.filefilter.OrFileFilter;
 import org.openide.util.lookup.ServiceProvider;
 
 import javax.swing.filechooser.FileFilter;
-import java.util.Collection;
+import java.io.FilenameFilter;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * A file filter service that keeps track of all file types that we are allowed to open.
@@ -45,7 +48,9 @@ public class FileFilterService {
         fileFilters.add(fileFilter);
     }
 
-    public Collection<FileFilter> getFileFilters() {
-        return fileFilters;
+    public FilenameFilter getFilenameFilters() {
+        return new OrFileFilter(fileFilters.stream()
+                .map(FilenameFilterAdapter::new)
+                .collect(Collectors.toList()));
     }
 }
